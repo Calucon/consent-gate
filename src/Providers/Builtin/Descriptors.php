@@ -34,6 +34,7 @@ final class Descriptors {
 		return array(
 			array(
 				'id'               => 'youtube',
+				'kind'             => 'video',
 				'label'            => 'YouTube',
 				'match'            => array(
 					'iframe_host' => array(
@@ -61,6 +62,7 @@ final class Descriptors {
 			),
 			array(
 				'id'               => 'vimeo',
+				'kind'             => 'video',
 				'label'            => 'Vimeo',
 				'match'            => array(
 					'iframe_host' => array( 'player.vimeo.com' ),
@@ -80,6 +82,7 @@ final class Descriptors {
 			),
 			array(
 				'id'               => 'google-maps',
+				'kind'             => 'map',
 				'label'            => 'Google Maps',
 				'match'            => array(
 					'iframe_host' => array( 'www.google.com', 'google.com', 'maps.google.com' ),
@@ -100,6 +103,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'openstreetmap',
+				'kind'        => 'map',
 				'label'       => 'OpenStreetMap',
 				'match'       => array(
 					'iframe_host' => array( 'www.openstreetmap.org', 'openstreetmap.org' ),
@@ -113,6 +117,7 @@ final class Descriptors {
 			),
 			array(
 				'id'               => 'spotify',
+				'kind'             => 'audio',
 				'label'            => 'Spotify',
 				'match'            => array(
 					'iframe_host' => array( 'open.spotify.com' ),
@@ -128,6 +133,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'soundcloud',
+				'kind'        => 'audio',
 				'label'       => 'SoundCloud',
 				'match'       => array(
 					'iframe_host' => array( 'w.soundcloud.com' ),
@@ -141,6 +147,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'apple-music',
+				'kind'        => 'audio',
 				'label'       => 'Apple Music',
 				'match'       => array(
 					'iframe_host' => array( 'embed.music.apple.com', 'embed.podcasts.apple.com' ),
@@ -153,6 +160,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'google-calendar',
+				'kind'        => 'calendar',
 				'label'       => 'Google Calendar',
 				'match'       => array(
 					'iframe_host' => array( 'calendar.google.com' ),
@@ -166,6 +174,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'google-forms',
+				'kind'        => 'form',
 				'label'       => 'Google Forms',
 				'match'       => array(
 					'iframe_host' => array( 'docs.google.com' ),
@@ -179,6 +188,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'matterport',
+				'kind'        => '3d',
 				'label'       => 'Matterport',
 				'match'       => array(
 					'iframe_host' => array( 'my.matterport.com' ),
@@ -192,6 +202,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'sketchfab',
+				'kind'        => '3d',
 				'label'       => 'Sketchfab',
 				'match'       => array(
 					'iframe_host' => array( 'sketchfab.com' ),
@@ -205,6 +216,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'typeform',
+				'kind'        => 'form',
 				'label'       => 'Typeform',
 				'match'       => array(
 					'iframe_host' => array( 'form.typeform.com' ),
@@ -218,6 +230,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'calendly',
+				'kind'        => 'calendar',
 				'label'       => 'Calendly',
 				'match'       => array(
 					'iframe_host' => array( 'calendly.com' ),
@@ -231,6 +244,7 @@ final class Descriptors {
 			),
 			array(
 				'id'                 => 'strava',
+				'kind'               => 'social',
 				'label'              => 'Strava',
 				'match'              => array(
 					'script_host' => array( 'strava-embeds.com', 'www.strava-embeds.com' ),
@@ -262,6 +276,7 @@ final class Descriptors {
 			),
 			array(
 				'id'               => 'twitter',
+				'kind'             => 'social',
 				'label'            => 'X (Twitter)',
 				'match'            => array(
 					'iframe_host' => array( 'platform.twitter.com', 'platform.x.com' ),
@@ -277,6 +292,7 @@ final class Descriptors {
 			),
 			array(
 				'id'               => 'instagram',
+				'kind'             => 'social',
 				'label'            => 'Instagram',
 				'match'            => array(
 					'iframe_host' => array( 'www.instagram.com', 'instagram.com' ),
@@ -292,6 +308,7 @@ final class Descriptors {
 			),
 			array(
 				'id'              => 'tiktok',
+				'kind'            => 'video',
 				'label'           => 'TikTok',
 				'match'           => array(
 					'iframe_host' => array( 'www.tiktok.com' ),
@@ -306,6 +323,7 @@ final class Descriptors {
 			),
 			array(
 				'id'                 => 'facebook',
+				'kind'               => 'social',
 				'label'              => 'Facebook',
 				'match'              => array(
 					'iframe_host' => array( 'www.facebook.com', 'web.facebook.com' ),
@@ -329,6 +347,7 @@ final class Descriptors {
 			),
 			array(
 				'id'              => 'reddit',
+				'kind'            => 'social',
 				'label'           => 'Reddit',
 				'match'           => array(
 					'iframe_host' => array( 'embed.reddit.com', 'www.redditmedia.com' ),
@@ -343,6 +362,7 @@ final class Descriptors {
 			),
 			array(
 				'id'          => 'giphy',
+				'kind'        => 'image',
 				'label'       => 'GIPHY',
 				'match'       => array(
 					'iframe_host' => array( 'giphy.com' ),

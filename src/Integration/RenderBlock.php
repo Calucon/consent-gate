@@ -79,6 +79,21 @@ final class RenderBlock {
 			}
 		}
 
+		// Per-block text (§7.5): plain text only, capped like the settings
+		// overrides, and empty means "inherit". The renderer escapes on
+		// output; this layer just keeps markup and length out of the story.
+		foreach ( array(
+			'caluconEmbedGateAction' => 'action_text',
+			'caluconEmbedGateNote'   => 'note_text',
+		) as $attr => $ctx_key ) {
+			if ( isset( $attrs[ $attr ] ) && is_string( $attrs[ $attr ] ) ) {
+				$text = trim( wp_strip_all_tags( $attrs[ $attr ], true ) );
+				if ( '' !== $text ) {
+					$ctx[ $ctx_key ] = mb_substr( $text, 0, 'note_text' === $ctx_key ? 400 : 120 );
+				}
+			}
+		}
+
 		return $this->plugin->gate( $content, $ctx );
 	}
 }

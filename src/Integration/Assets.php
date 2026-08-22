@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use CaluconEmbedGate\Support\AppearanceCss;
+use CaluconEmbedGate\Support\ThemePalette;
 
 /**
  * Hooks wp_enqueue_scripts and owns the gate.js/gate.css/cmp-bridge.js handles.
@@ -39,7 +40,11 @@ final class Assets {
 	 * @param callable $cmp_config_source fn(): ?array — Plugin::cmp_bridge_config().
 	 * @param callable $should_bail       fn(): bool — Plugin::should_bail().
 	 */
-	public function __construct( array $options, callable $cmp_config_source, callable $should_bail ) {
+	/** @var callable|null fn(): array — provider id => kind, for the button glyph. */
+	private $kinds_source;
+
+	public function __construct( array $options, callable $cmp_config_source, callable $should_bail, ?callable $kinds_source = null ) {
+		$this->kinds_source      = $kinds_source;
 		$this->options           = $options;
 		$this->cmp_config_source = $cmp_config_source;
 		$this->should_bail       = $should_bail;
@@ -93,7 +98,13 @@ final class Assets {
 			);
 		}
 
-		$appearance = AppearanceCss::build( $this->options['appearance'] );
+		// Resolve providers (fires the providers filter) and the theme
+		// palette only when the CSS will actually use them — both cost a
+		// little on every page view otherwise, embeds or not.
+		$a          = $this->options['appearance'];
+		$kinds      = ! empty( $a['play_icon'] ) && null !== $this->kinds_source ? (array) call_user_func( $this->kinds_source ) : array();
+		$palette    = AppearanceCss::uses_theme_palette( $a ) ? ThemePalette::map() : array();
+		$appearance = AppearanceCss::build( $a, $kinds, $palette );
 		if ( '' !== $appearance ) {
 			wp_add_inline_style( 'calucon-embed-gate', $appearance );
 		}

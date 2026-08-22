@@ -354,10 +354,13 @@
 		var panel = findByClass( container, 'div', 'cg-embed__panel' );
 		if ( panel && panel.parentNode === container ) {
 			// Keep the fallback destination reachable for the error state
-			// before the panel (and its link) is removed.
-			var links = panel.getElementsByTagName( 'a' );
+			// before the panel (and its link) is removed. Target the §5.1
+			// fallback wrapper by class — "the last link in the panel" would
+			// pick the privacy-policy link when the site shows one.
+			var fallbackWrap = findByClass( panel, 'p', 'cg-embed__fallback' );
+			var links = ( fallbackWrap || panel ).getElementsByTagName( 'a' );
 			if ( links.length && ! container.getAttribute( 'data-cg-fallback' ) ) {
-				container.setAttribute( 'data-cg-fallback', links[ links.length - 1 ].getAttribute( 'href' ) || '' );
+				container.setAttribute( 'data-cg-fallback', links[ 0 ].getAttribute( 'href' ) || '' );
 			}
 		}
 		// The panel goes, and the poster image goes with it — left in place

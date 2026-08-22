@@ -55,6 +55,77 @@ final class Csp {
 	}
 
 	/**
+	 * The same hosts, one row each, with the providers that need them —
+	 * so the settings screen can explain WHY a host is in the snippet.
+	 *
+	 * @param array[] $providers Descriptors (disabled ones are skipped).
+	 * @return array<int,array{directive:string,host:string,providers:string[]}>
+	 */
+	public static function hosts( array $providers ): array {
+		$rows = array();
+
+		foreach ( $providers as $descriptor ) {
+			if ( isset( $descriptor['enabled'] ) && false === $descriptor['enabled'] ) {
+				continue;
+			}
+			$match = isset( $descriptor['match'] ) && is_array( $descriptor['match'] ) ? $descriptor['match'] : array();
+			$label = isset( $descriptor['label'] ) && '' !== $descriptor['label'] ? (string) $descriptor['label'] : (string) ( $descriptor['id'] ?? '' );
+
+			$frame = array();
+			if ( isset( $descriptor['load_host'] ) && is_string( $descriptor['load_host'] ) && '' !== $descriptor['load_host'] ) {
+				$frame[] = $descriptor['load_host'];
+			} elseif ( isset( $match['iframe_host'] ) ) {
+				$frame = (array) $match['iframe_host'];
+			}
+			$script = isset( $match['script_host'] ) ? (array) $match['script_host'] : array();
+
+			foreach ( array(
+				'frame-src'  => $frame,
+				'script-src' => $script,
+			) as $directive => $hosts ) {
+				foreach ( $hosts as $host ) {
+					$key = $directive . ' ' . $host;
+					if ( ! isset( $rows[ $key ] ) ) {
+						$rows[ $key ] = array(
+							'directive' => $directive,
+							'host'      => (string) $host,
+							'providers' => array(),
+						);
+					}
+					if ( ! in_array( $label, $rows[ $key ]['providers'], true ) ) {
+						$rows[ $key ]['providers'][] = $label;
+					}
+				}
+			}
+		}
+
+		return array_values( $rows );
+	}
+
+	/**
+	 * hosts() regrouped one row per provider — the readable form for a
+	 * table: "YouTube loads frames from …, scripts from …".
+	 *
+	 * @param array[] $providers Descriptors (disabled ones are skipped).
+	 * @return array<string,array{frame-src:string[],script-src:string[]}> label => hosts per directive, in provider order.
+	 */
+	public static function by_provider( array $providers ): array {
+		$out = array();
+		foreach ( self::hosts( $providers ) as $row ) {
+			foreach ( $row['providers'] as $label ) {
+				if ( ! isset( $out[ $label ] ) ) {
+					$out[ $label ] = array(
+						'frame-src'  => array(),
+						'script-src' => array(),
+					);
+				}
+				$out[ $label ][ $row['directive'] ][] = $row['host'];
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * Render the snippet a site owner appends to their existing policy.
 	 *
 	 * @param array[] $providers Descriptors.

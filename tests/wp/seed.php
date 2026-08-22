@@ -78,6 +78,13 @@ $cg_seed_posts = array(
 		'title'   => 'Privacy tools',
 		'content' => '<p>Manage stored embed consents:</p>' . "\n" . '[calucon_embed_gate_withdraw]',
 	),
+	// Per-embed texts set in the block editor (RenderBlock): markup is
+	// stripped and the texts are capped (button 120, notice 400).
+	'per-embed-text' => array(
+		'title'   => 'Per-embed text',
+		'content' => "<!-- wp:html {\"caluconEmbedGateAction\":\"Load <b>the trailer</b>\",\"caluconEmbedGateNote\":\"<em>Own notice.</em> " . str_repeat( 'x', 500 ) . "\"} -->\n"
+			. '<iframe src="https://player.vimeo.com/video/76979871" title="Trailer" width="640" height="360"></iframe>' . "\n<!-- /wp:html -->",
+	),
 );
 
 foreach ( $cg_seed_posts as $cg_slug => $cg_post ) {
@@ -114,6 +121,19 @@ add_filter( 'wp_resource_hints', function ( $urls, $rel ) {
 	}
 	return $urls;
 }, 5, 2 );
+// A code-registered provider (docs/customizing.md "Adding a provider"): the
+// integration tests assert an owner-defined row cannot take its host.
+add_filter( 'calucon_embed_gate_providers', function ( array $providers ): array {
+	$providers[] = array(
+		'id'          => 'partner-code',
+		'label'       => 'Partner (code)',
+		'match'       => array( 'iframe_host' => array( 'code.example-partner.com' ) ),
+		'load_host'   => 'code-nocookie.example-partner.com',
+		'privacy_url' => 'https://code.example-partner.com/privacy',
+		'kind'        => 'document',
+	);
+	return $providers;
+} );
 add_action( 'wp_head', function () {
 	echo '<link rel="preconnect" href="https://www.youtube.com">' . "\n";
 	echo '<link rel="preconnect" href="https://cdn.literal-safe.example">' . "\n";

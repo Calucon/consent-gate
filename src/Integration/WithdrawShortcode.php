@@ -24,14 +24,22 @@ final class WithdrawShortcode {
 	/** @var callable|null Enqueues the plugin's front-end assets. */
 	private $enqueue;
 
+	/** @var string Appearance variant: '' (filled) | 'outline' | 'link'. */
+	private string $style;
+
 	/**
 	 * @param callable|null $enqueue Called on render so gate.js is present
 	 *                               even on pages without a single embed —
 	 *                               the privacy-policy page this control is
 	 *                               made for.
+	 * @param string        $style   appearance.withdraw_style: the sanitised
+	 *                               variant ('' renders the filled default
+	 *                               with no extra class — the pre-0.10
+	 *                               markup, byte for byte).
 	 */
-	public function __construct( ?callable $enqueue = null ) {
+	public function __construct( ?callable $enqueue = null, string $style = '' ) {
 		$this->enqueue = $enqueue;
+		$this->style   = in_array( $style, array( 'outline', 'link' ), true ) ? $style : '';
 	}
 
 	/**
@@ -60,7 +68,9 @@ final class WithdrawShortcode {
 
 		$status_id = 'cg-withdraw-status-' . wp_unique_id();
 
-		return '<button type="button" class="cg-withdraw" data-cg-withdraw aria-controls="' . esc_attr( $status_id ) . '">'
+		$class = 'cg-withdraw' . ( '' !== $this->style ? ' cg-withdraw--' . $this->style : '' );
+
+		return '<button type="button" class="' . esc_attr( $class ) . '" data-cg-withdraw aria-controls="' . esc_attr( $status_id ) . '">'
 			. esc_html( $atts['label'] )
 			. '</button>'
 			. '<span id="' . esc_attr( $status_id ) . '" class="cg-withdraw__status" role="status" aria-live="polite"></span>';

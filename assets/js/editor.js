@@ -36,7 +36,9 @@
 				// Owner-supplied poster (§5.4): the ID is what the server
 				// renders from; the URL exists only for the inspector preview.
 				caluconEmbedGatePoster: { type: 'number', default: 0 },
-				caluconEmbedGatePosterUrl: { type: 'string', default: '' }
+				caluconEmbedGatePosterUrl: { type: 'string', default: '' },
+				caluconEmbedGateAction: { type: 'string', default: '' },
+				caluconEmbedGateNote: { type: 'string', default: '' }
 			} );
 			return settings;
 		}
@@ -71,7 +73,7 @@
 						render: function ( obj ) {
 							return el(
 								'div',
-								{ className: 'cg-poster-control' },
+								{ className: 'cg-poster-control', style: { marginBottom: '16px' } },
 								posterUrl ? el( 'img', {
 									className: 'cg-poster-control__preview',
 									src: posterUrl,
@@ -125,7 +127,26 @@
 									? __( 'This block’s embeds will load immediately for every visitor, without a consent click.', 'calucon-third-party-embed-gate' )
 									: __( 'Overrides the site-wide setting for this block only.', 'calucon-third-party-embed-gate' )
 							} ),
-							value === 'never' ? null : posterControls
+							value === 'never' ? null : posterControls,
+							value === 'never' ? null : el( wp.components.TextControl, {
+								label: __( 'Button text for this embed', 'calucon-third-party-embed-gate' ),
+								value: props.attributes.caluconEmbedGateAction || '',
+								placeholder: __( 'Site default', 'calucon-third-party-embed-gate' ),
+								onChange: function ( next ) {
+									props.setAttributes( { caluconEmbedGateAction: next } );
+								},
+								help: __( 'Plain text, for example “Load the trailer”. Empty keeps the provider’s default.', 'calucon-third-party-embed-gate' )
+							} ),
+							value === 'never' ? null : el( wp.components.TextareaControl, {
+								label: __( 'Notice text for this embed', 'calucon-third-party-embed-gate' ),
+								value: props.attributes.caluconEmbedGateNote || '',
+								placeholder: __( 'Site default', 'calucon-third-party-embed-gate' ),
+								rows: 3,
+								onChange: function ( next ) {
+									props.setAttributes( { caluconEmbedGateNote: next } );
+								},
+								help: __( 'Replaces the notice above the button for this embed only. Keep it honest: the notice tells visitors what loading the content does.', 'calucon-third-party-embed-gate' )
+							} )
 						)
 					)
 				);

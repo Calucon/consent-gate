@@ -23,7 +23,7 @@ mkdir -p "$STAGE"
 # node_modules/vendor (the plugin has no runtime Composer dependencies).
 # docs/ ships deliberately: customizing.md is the on-site reference for
 # developers and AI agents (the deep docs stay in the repo).
-cp calucon-third-party-embed-gate.php uninstall.php readme.txt LICENSE "$STAGE/"
+cp calucon-third-party-embed-gate.php uninstall.php readme.txt LICENSE wpml-config.xml "$STAGE/"
 cp -R src assets templates languages docs "$STAGE/"
 
 ( cd build && zip -rq "calucon-third-party-embed-gate-${VERSION}.zip" calucon-third-party-embed-gate )

@@ -7,9 +7,16 @@
 #
 # Plugin-directory assets (icons/banners/screenshots) live in .wordpress-org/
 # and are deployed to the SVN /assets directory separately, never into trunk.
+#
+# Repository documents (CLAUDE.md, PLAN.md, README.md, SECURITY.md) are for
+# contributors, not installs: readme.txt is the one the directory reads.
 
 /.git
 /.github
+/CLAUDE.md
+/PLAN.md
+/README.md
+/SECURITY.md
 /.gitignore
 /.gitattributes
 /.distignore

@@ -16,8 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use CaluconEmbedGate\Cmp\Detector;
+use CaluconEmbedGate\Providers\CustomProviders;
+use CaluconEmbedGate\Support\AppearanceCss;
 use CaluconEmbedGate\Support\Csp;
 use CaluconEmbedGate\Support\Options;
+use CaluconEmbedGate\Support\ThemePalette;
 
 /**
  * Settings > Calucon Third-Party Embed Gate.
@@ -62,6 +65,41 @@ final class SettingsPage {
 		add_action( 'admin_init', array( $this, 'register_setting' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_filter( 'admin_footer_text', array( $this, 'footer_support_link' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( CALUCON_EMBED_GATE_FILE ), array( $this, 'action_links' ) );
+		add_filter( 'plugin_row_meta', array( $this, 'row_meta' ), 10, 2 );
+	}
+
+	/**
+	 * A "Support development" link in the plugin's row meta — where
+	 * WordPress convention puts donate/support links, next to "View
+	 * details" — not among the action links. A plain link: nothing loads
+	 * until the owner clicks it (the plugin's no-outbound rule applies to
+	 * its admin UI too).
+	 *
+	 * @param array  $links Row meta links.
+	 * @param string $file  Plugin basename the row is for.
+	 * @return array
+	 */
+	public function row_meta( $links, $file ): array {
+		if ( plugin_basename( CALUCON_EMBED_GATE_FILE ) === $file ) {
+			$links[] = '<a href="https://ko-fi.com/calucon" target="_blank" rel="noopener noreferrer">'
+				. esc_html__( 'Support development', 'calucon-third-party-embed-gate' ) . '</a>';
+		}
+		return (array) $links;
+	}
+
+	/**
+	 * "Settings" next to Deactivate on the Plugins screen — the standard
+	 * shortcut to a plugin's settings page.
+	 *
+	 * @param array $links Existing action links.
+	 * @return array
+	 */
+	public function action_links( $links ): array {
+		$settings = '<a href="' . esc_url( admin_url( 'options-general.php?page=calucon-embed-gate' ) ) . '">'
+			. esc_html__( 'Settings', 'calucon-third-party-embed-gate' ) . '</a>';
+		array_unshift( $links, $settings );
+		return (array) $links;
 	}
 
 	/**
@@ -131,21 +169,93 @@ final class SettingsPage {
 			CALUCON_EMBED_GATE_VERSION,
 			true
 		);
+		wp_add_inline_style( 'calucon-embed-gate-admin', AppearanceCss::kind_icon_rules( '.cg-kind-glyph' ) );
+		wp_enqueue_script(
+			'calucon-embed-gate-admin-custom-providers',
+			plugins_url( 'assets/js/admin-custom-providers.js', CALUCON_EMBED_GATE_FILE ),
+			array(),
+			CALUCON_EMBED_GATE_VERSION,
+			true
+		);
+		wp_enqueue_script(
+			'calucon-embed-gate-admin-csp',
+			plugins_url( 'assets/js/admin-csp.js', CALUCON_EMBED_GATE_FILE ),
+			array(),
+			CALUCON_EMBED_GATE_VERSION,
+			true
+		);
+		wp_add_inline_script(
+			'calucon-embed-gate-admin-csp',
+			'window.caluconEmbedGateCsp = ' . wp_json_encode(
+				array(
+					// The owner's browser loads this once, same-origin, on an
+					// explicit click, to read the site's own CSP header. The
+					// server never requests anything (invariant 9).
+					'home'       => home_url( '/' ),
+					'required'   => Csp::directives( $this->providers() ),
+					'directives' => $this->csp_directive_labels(),
+					'i18n'       => array(
+						'checking'          => __( 'Checking your home page…', 'calucon-third-party-embed-gate' ),
+						'error'             => __( 'Could not load your home page from this browser, so nothing could be checked. Try again; if it keeps failing, open the home page in a new tab and look for a Content-Security-Policy header in the browser\'s developer tools (Network panel).', 'calucon-third-party-embed-gate' ),
+						'none'              => __( 'Your home page sends no Content-Security-Policy. You can skip this section.', 'calucon-third-party-embed-gate' ),
+						'noneHint'          => __( 'Checked just now, as your browser sees the page. If you are sure a policy is set somewhere (some setups only send it on certain pages), add the lines below to it anyway — listing a host that is never loaded is harmless.', 'calucon-third-party-embed-gate' ),
+						'clean'             => __( 'Your site sends a Content-Security-Policy, and it already allows every enabled provider. Nothing to do.', 'calucon-third-party-embed-gate' ),
+						'missing'           => __( 'Your site sends a Content-Security-Policy that does not yet allow these hosts — their embeds would stay empty after the visitor clicks Load:', 'calucon-third-party-embed-gate' ),
+						'missingHint'       => __( 'Add the lines below to your policy, where it is defined, and run the check again.', 'calucon-third-party-embed-gate' ),
+						'reportOnly'        => __( 'Your site sends a report-only policy (Content-Security-Policy-Report-Only). It logs violations but blocks nothing, so embeds still load.', 'calucon-third-party-embed-gate' ),
+						'reportOnlyMissing' => __( 'If you later switch it to an enforced policy, it would need these hosts:', 'calucon-third-party-embed-gate' ),
+						'reportOnlyClean'   => __( 'It already lists every enabled provider, so switching it to enforced would be safe for the embeds.', 'calucon-third-party-embed-gate' ),
+						'copied'            => __( 'Copied to the clipboard.', 'calucon-third-party-embed-gate' ),
+						'copyFailed'        => __( 'Could not copy — select the text and copy it by hand.', 'calucon-third-party-embed-gate' ),
+					),
+				)
+			) . ';',
+			'before'
+		);
+		wp_add_inline_script(
+			'calucon-embed-gate-admin',
+			'window.caluconEmbedGateAdminPalette = ' . wp_json_encode( $this->theme_palette() ) . ';',
+			'before'
+		);
 		wp_add_inline_script(
 			'calucon-embed-gate-admin',
 			'window.caluconEmbedGateAdminI18n = ' . wp_json_encode(
 				array(
 					/* translators: contrast-report line. 1: which colour pair, 2: measured ratio like "4.9:1", 3: verdict. */
-					'line'       => __( '%1$s: %2$s — %3$s', 'calucon-third-party-embed-gate' ),
-					'panelText'  => __( 'Panel text on the panel background', 'calucon-third-party-embed-gate' ),
-					'buttonText' => __( 'Button text on the button background', 'calucon-third-party-embed-gate' ),
-					'linkText'   => __( 'Fallback link on the panel background', 'calucon-third-party-embed-gate' ),
-					'pass'       => __( 'readable (meets the 4.5:1 minimum)', 'calucon-third-party-embed-gate' ),
-					'fail'       => __( 'hard to read — below the 4.5:1 minimum. Pick a lighter or darker colour for this pair.', 'calucon-third-party-embed-gate' ),
+					'line'         => __( '%1$s: %2$s — %3$s', 'calucon-third-party-embed-gate' ),
+					'panelText'    => __( 'Panel text on the panel background', 'calucon-third-party-embed-gate' ),
+					'buttonText'   => __( 'Button text on the button background', 'calucon-third-party-embed-gate' ),
+					'linkText'     => __( 'Fallback link on the panel background', 'calucon-third-party-embed-gate' ),
+					'withdrawText' => __( 'Withdraw button text on its background', 'calucon-third-party-embed-gate' ),
+					'fixText'      => __( 'Make readable', 'calucon-third-party-embed-gate' ),
+					'fixedText'    => __( 'Colour adjusted for readability.', 'calucon-third-party-embed-gate' ),
+					'applied'      => __( 'Style applied.', 'calucon-third-party-embed-gate' ),
+					'resetDone'    => __( 'Appearance reset to theme defaults.', 'calucon-third-party-embed-gate' ),
+					'undone'       => __( 'Undone.', 'calucon-third-party-embed-gate' ),
+					'resetRow'     => __( 'Reset', 'calucon-third-party-embed-gate' ),
+					/* translators: %s: the setting's row label, e.g. "Icon". */
+					'resetRowAria' => __( 'Reset %s to its default', 'calucon-third-party-embed-gate' ),
+					/* translators: %s: the setting's row label, e.g. "Icon". */
+					'rowReset'     => __( '%s reset to its default.', 'calucon-third-party-embed-gate' ),
+					/* translators: %d: number of further customised settings not named in the section badge. */
+					'moreCount'    => __( '+%d more', 'calucon-third-party-embed-gate' ),
+					'leaveWarning' => __( 'You have unsaved appearance changes.', 'calucon-third-party-embed-gate' ),
+					'pass'         => __( 'readable (meets the 4.5:1 minimum)', 'calucon-third-party-embed-gate' ),
+					'fail'         => __( 'hard to read — below the 4.5:1 minimum. Pick a lighter or darker colour for this pair.', 'calucon-third-party-embed-gate' ),
 				)
 			) . ';',
 			'before'
 		);
+	}
+
+	/**
+	 * The active theme's palette for the pickers' swatches and the Theme
+	 * colour selects. See Support\ThemePalette.
+	 *
+	 * @return array<int,array{name:string,slug:string,color:string}>
+	 */
+	private function theme_palette(): array {
+		return ThemePalette::entries();
 	}
 
 	/**
@@ -170,10 +280,36 @@ final class SettingsPage {
 			Options::OPTION,
 			array(
 				'type'              => 'array',
-				'sanitize_callback' => array( Options::class, 'sanitize' ),
+				'sanitize_callback' => array( $this, 'sanitize_options' ),
 				'default'           => Options::defaults(),
 			)
 		);
+	}
+
+	/**
+	 * Sanitise a submitted option tree, refusing custom-provider hosts the
+	 * built-in (or code-registered) providers handle — and telling the owner
+	 * which ones, so the refusal never looks like data loss.
+	 *
+	 * @param mixed $raw Submitted option tree.
+	 * @return array
+	 */
+	public function sanitize_options( $raw ): array {
+		$report = Options::sanitize_report( $raw, CustomProviders::reserved_hosts( $this->providers() ) );
+		foreach ( $report['rejected_hosts'] as $label => $hosts ) {
+			add_settings_error(
+				Options::OPTION,
+				'calucon_embed_gate_reserved_host_' . md5( (string) $label ),
+				sprintf(
+					/* translators: 1: custom provider label, 2: comma-separated host names. */
+					__( '%1$s: %2$s skipped — a built-in provider already handles these hosts, with its privacy-preserving load target and texts. Adjust that provider in the table instead.', 'calucon-third-party-embed-gate' ),
+					esc_html( (string) $label ),
+					esc_html( implode( ', ', $hosts ) )
+				),
+				'warning'
+			);
+		}
+		return $report['options'];
 	}
 
 	/**
@@ -215,7 +351,7 @@ final class SettingsPage {
 			<form action="options.php" method="post">
 				<?php settings_fields( 'calucon_embed_gate' ); ?>
 
-				<?php $this->render_providers_tab( $providers ); ?>
+				<?php $this->render_providers_tab( $providers, $options['display'], $options['custom_providers'] ); ?>
 
 				<?php $this->render_detection_tab( $detection ); ?>
 
@@ -224,6 +360,18 @@ final class SettingsPage {
 				<?php $this->render_consent_tab( $options ); ?>
 
 				<?php submit_button(); ?>
+
+				<?php
+				// Sticky status bar (admin-appearance.js): shown while the form
+				// holds unsaved changes, with Save and a short-lived Undo after a
+				// quick style or reset. Hidden markup without JavaScript — the
+				// normal Save button above still works.
+				?>
+				<div id="cg-unsaved" class="cg-unsaved" role="status" aria-live="polite" hidden>
+					<span class="cg-unsaved__text"><?php esc_html_e( 'You have unsaved changes.', 'calucon-third-party-embed-gate' ); ?></span>
+					<button type="button" id="cg-undo" class="button" hidden><?php esc_html_e( 'Undo all changes', 'calucon-third-party-embed-gate' ); ?></button>
+					<button type="submit" class="button button-primary"><?php esc_html_e( 'Save changes', 'calucon-third-party-embed-gate' ); ?></button>
+				</div>
 			</form>
 
 			<?php
@@ -231,12 +379,9 @@ final class SettingsPage {
 			// the form's Save button while this panel is active (data-cg-readonly).
 			?>
 			<div id="cg-tab-status" class="cg-tab-panel" role="tabpanel" aria-labelledby="cg-tabbtn-status" data-cg-readonly="1">
-			<h2><?php esc_html_e( 'Content-Security-Policy snippet', 'calucon-third-party-embed-gate' ); ?></h2>
-			<p class="description"><?php esc_html_e( 'If your site sends a Content-Security-Policy, it needs to allow the enabled providers\' hosts so embeds can load after consent. These hosts are not contacted until the visitor clicks — the CSP entry is permission, not traffic.', 'calucon-third-party-embed-gate' ); ?></p>
-			<textarea readonly rows="4" class="large-text code" aria-label="<?php echo esc_attr( __( 'Content-Security-Policy snippet', 'calucon-third-party-embed-gate' ) ); ?>"><?php echo esc_textarea( Csp::snippet( $this->providers() ) ); ?></textarea>
-
 			<?php $this->render_compatibility( $options ); ?>
 			<?php $this->render_status(); ?>
+			<?php $this->render_csp(); ?>
 			</div>
 		</div>
 		<?php
@@ -247,13 +392,19 @@ final class SettingsPage {
 	 * overrides (§7.1).
 	 *
 	 * @param array $providers Sanitised per-provider option rows.
+	 * @param array $display   Sanitised display option subtree.
+	 * @param array $custom    Sanitised owner-defined provider rows.
 	 * @return void
 	 */
-	private function render_providers_tab( array $providers ): void {
+	private function render_providers_tab( array $providers, array $display, array $custom ): void {
 		?>
 <div id="cg-tab-providers" class="cg-tab-panel" role="tabpanel" aria-labelledby="cg-tabbtn-providers">
 				<h2><?php esc_html_e( 'Providers', 'calucon-third-party-embed-gate' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Disabling a provider stops gating its embeds — they load exactly as WordPress renders them. Unknown third-party iframes and scripts are always gated by the generic entries.', 'calucon-third-party-embed-gate' ); ?></p>
+				<p class="description"><?php esc_html_e( 'Disabling a provider stops gating its embeds — they load exactly as WordPress renders them. Unknown third-party iframes and scripts are always gated by the generic entries. The privacy policy URL column shows the built-in link greyed out; enter your own (https) to point at a localised or moved policy page.', 'calucon-third-party-embed-gate' ); ?></p>
+				<p>
+					<input type="hidden" name="<?php echo esc_attr( Options::OPTION ); ?>[display][privacy_link]" value="0">
+					<label><input type="checkbox" name="<?php echo esc_attr( Options::OPTION ); ?>[display][privacy_link]" value="1" <?php checked( $display['privacy_link'] ); ?>> <?php esc_html_e( 'Link each provider\'s privacy policy in the placeholder panel, so visitors can read it before loading anything. Applies to the providers listed below; unknown embeds have no known policy to link.', 'calucon-third-party-embed-gate' ); ?></label>
+				</p>
 				<table class="widefat striped" style="max-width: 60rem;">
 					<thead>
 						<tr>
@@ -262,6 +413,7 @@ final class SettingsPage {
 							<th scope="col"><?php esc_html_e( 'Privacy-preserving load', 'calucon-third-party-embed-gate' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Custom note (optional)', 'calucon-third-party-embed-gate' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Custom button text (optional)', 'calucon-third-party-embed-gate' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Privacy policy URL (optional)', 'calucon-third-party-embed-gate' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -289,12 +441,23 @@ final class SettingsPage {
 						$aria_note = sprintf( __( 'Custom note for %s', 'calucon-third-party-embed-gate' ), $label );
 						/* translators: %s: provider label. */
 						$aria_action = sprintf( __( 'Custom button text for %s', 'calucon-third-party-embed-gate' ), $label );
+						/* translators: %s: provider label. */
+						$aria_policy = sprintf( __( 'Privacy policy URL for %s', 'calucon-third-party-embed-gate' ), $label );
+						$builtin_url = isset( $descriptor['privacy_url'] ) && is_string( $descriptor['privacy_url'] ) ? $descriptor['privacy_url'] : '';
 						?>
 						<tr>
-							<td><?php echo esc_html( $label ); ?></td>
+							<td><span class="cg-provider-name"><span class="cg-kind-glyph" data-cg-kind="<?php echo esc_attr( $descriptor['kind'] ?? '' ); ?>" title="<?php echo esc_attr( $this->kind_labels()[ $descriptor['kind'] ?? '' ] ?? '' ); ?>"></span><span><?php echo esc_html( $label ); ?>
+							<?php
+							if ( ! empty( $descriptor['custom'] ) ) :
+								?>
+								<span class="cg-tag"><?php esc_html_e( 'added by you', 'calucon-third-party-embed-gate' ); ?></span><?php endif; ?></span></span></td>
 							<td>
-								<input type="hidden" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?>[enabled]" value="0">
-								<input type="checkbox" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[enabled]" value="1" aria-label="<?php echo esc_attr( $aria_gate ); ?>" <?php checked( $enabled ); ?>>
+								<?php if ( ! empty( $descriptor['custom'] ) ) : ?>
+									<span title="<?php esc_attr_e( 'Your own providers are always gated. To let a host through, use the never-gate list under Detection.', 'calucon-third-party-embed-gate' ); ?>"><?php esc_html_e( 'always', 'calucon-third-party-embed-gate' ); ?></span>
+								<?php else : ?>
+									<input type="hidden" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?>[enabled]" value="0">
+									<input type="checkbox" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[enabled]" value="1" aria-label="<?php echo esc_attr( $aria_gate ); ?>" <?php checked( $enabled ); ?>>
+								<?php endif; ?>
 							</td>
 							<td>
 								<?php if ( $has_variant ) : ?>
@@ -306,12 +469,150 @@ final class SettingsPage {
 							</td>
 							<td><input type="text" class="regular-text" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[note]" aria-label="<?php echo esc_attr( $aria_note ); ?>" value="<?php echo esc_attr( isset( $row['note'] ) ? $row['note'] : '' ); ?>"></td>
 							<td><input type="text" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[action]" aria-label="<?php echo esc_attr( $aria_action ); ?>" value="<?php echo esc_attr( isset( $row['action'] ) ? $row['action'] : '' ); ?>"></td>
+							<td><input type="url" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[privacy_url]" aria-label="<?php echo esc_attr( $aria_policy ); ?>" value="<?php echo esc_attr( isset( $row['privacy_url'] ) ? $row['privacy_url'] : '' ); ?>" placeholder="<?php echo esc_attr( $builtin_url ); ?>" pattern="https://.*" inputmode="url"></td>
 						</tr>
 					<?php endforeach; ?>
 					</tbody>
 				</table>
+
+				<?php $this->render_custom_providers( $custom ); ?>
 				</div>
 <?php // phpcs:ignore Generic.WhiteSpace.ScopeIndent.Incorrect -- the close tag sits at column 0 so the method emits the moved block byte-identically, with no stray indentation.
+	}
+
+	/**
+	 * Human names for the provider kinds (AppearanceCss::KINDS), generic first.
+	 *
+	 * @return array<string,string> kind => label.
+	 */
+	private function kind_labels(): array {
+		return array(
+			''         => __( 'Generic', 'calucon-third-party-embed-gate' ),
+			'video'    => __( 'Video', 'calucon-third-party-embed-gate' ),
+			'map'      => __( 'Map', 'calucon-third-party-embed-gate' ),
+			'audio'    => __( 'Audio / podcast', 'calucon-third-party-embed-gate' ),
+			'social'   => __( 'Social post', 'calucon-third-party-embed-gate' ),
+			'form'     => __( 'Form / survey', 'calucon-third-party-embed-gate' ),
+			'calendar' => __( 'Calendar / booking', 'calucon-third-party-embed-gate' ),
+			'document' => __( 'Document / slides', 'calucon-third-party-embed-gate' ),
+			'image'    => __( 'Image / GIF', 'calucon-third-party-embed-gate' ),
+			'3d'       => __( '3D / virtual tour', 'calucon-third-party-embed-gate' ),
+		);
+	}
+
+	/**
+	 * "Your own providers": owner-defined descriptors (Providers\CustomProviders).
+	 *
+	 * One row per saved provider plus one blank row, so adding works with
+	 * JavaScript off (save once per provider); admin-custom-providers.js
+	 * adds an "Add another" button that clones the blank row. Everything
+	 * per-provider beyond name/hosts/kind lives in the table above, where
+	 * a saved custom provider appears like any built-in.
+	 *
+	 * @param array $custom Sanitised owner-defined provider rows.
+	 * @return void
+	 */
+	private function render_custom_providers( array $custom ): void {
+		// Hosts the built-ins claim, to warn about precedence at a glance.
+		$builtin_hosts = array();
+		foreach ( $this->providers() as $descriptor ) {
+			if ( ! empty( $descriptor['custom'] ) ) {
+				continue;
+			}
+			foreach ( array( 'iframe_host', 'script_host' ) as $key ) {
+				foreach ( (array) ( $descriptor['match'][ $key ] ?? array() ) as $host ) {
+					$builtin_hosts[ $host ] = isset( $descriptor['label'] ) ? (string) $descriptor['label'] : (string) $descriptor['id'];
+				}
+			}
+		}
+		$kinds       = $this->kind_labels();
+		$rows        = array_values( $custom );
+		$rows[]      = array(
+			'id'           => '',
+			'label'        => '',
+			'hosts'        => array(),
+			'script_hosts' => array(),
+			'kind'         => '',
+		);
+		$blank_index = count( $rows ) - 1;
+		?>
+				<h3 id="cg-custom-providers-heading"><?php esc_html_e( 'Your own providers', 'calucon-third-party-embed-gate' ); ?></h3>
+				<p class="description"><?php esc_html_e( 'Embeds from hosts nobody listed are already gated, under their host name. Add a provider here to give such a host a proper name and a kind (for the button icon); after saving it appears in the table above, where you can set its note, button text and privacy-policy link like for any other provider. Hosts must match exactly — list www. and bare variants separately. Adding a provider never changes what is gated: unknown hosts are gated either way, and hosts a built-in provider handles stay with that provider (they are skipped here). Your own providers are always gated; to let a host through, use the never-gate list under Detection.', 'calucon-third-party-embed-gate' ); ?></p>
+				<table class="widefat striped cg-custom-providers" id="cg-custom-providers" style="max-width: 60rem;" aria-labelledby="cg-custom-providers-heading">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Name', 'calucon-third-party-embed-gate' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Embed hosts (one per line)', 'calucon-third-party-embed-gate' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Script hosts (optional)', 'calucon-third-party-embed-gate' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Kind', 'calucon-third-party-embed-gate' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Remove', 'calucon-third-party-embed-gate' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+					<?php foreach ( $rows as $i => $row ) : ?>
+						<?php
+						$is_blank    = $i === $blank_index;
+						$name_prefix = esc_attr( Options::OPTION . '[custom_providers][' . $i . ']' );
+						$row_label   = '' !== $row['label'] ? $row['label'] : __( 'new provider', 'calucon-third-party-embed-gate' );
+						/* translators: %s: provider label. */
+						$aria_name = sprintf( __( 'Name of %s', 'calucon-third-party-embed-gate' ), $row_label );
+						/* translators: %s: provider label. */
+						$aria_hosts = sprintf( __( 'Embed hosts of %s', 'calucon-third-party-embed-gate' ), $row_label );
+						/* translators: %s: provider label. */
+						$aria_scripts = sprintf( __( 'Script hosts of %s', 'calucon-third-party-embed-gate' ), $row_label );
+						/* translators: %s: provider label. */
+						$aria_kind = sprintf( __( 'Kind of %s', 'calucon-third-party-embed-gate' ), $row_label );
+						/* translators: %s: provider label. */
+						$aria_remove = sprintf( __( 'Remove %s', 'calucon-third-party-embed-gate' ), $row_label );
+						$overlaps    = array();
+						foreach ( array_merge( $row['hosts'], $row['script_hosts'] ) as $host ) {
+							if ( isset( $builtin_hosts[ $host ] ) ) {
+								$overlaps[ $host ] = $builtin_hosts[ $host ];
+							}
+						}
+						?>
+						<tr<?php echo $is_blank ? ' data-cg-blank="1"' : ''; ?>>
+							<td>
+								<input type="hidden" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above. ?>[id]" value="<?php echo esc_attr( $row['id'] ); ?>">
+								<input type="text" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[label]" aria-label="<?php echo esc_attr( $aria_name ); ?>" value="<?php echo esc_attr( $row['label'] ); ?>" maxlength="80" placeholder="<?php echo esc_attr( $is_blank ? __( 'e.g. Example Videos', 'calucon-third-party-embed-gate' ) : '' ); ?>">
+							</td>
+							<td>
+								<textarea name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[hosts]" rows="2" class="code" aria-label="<?php echo esc_attr( $aria_hosts ); ?>" placeholder="<?php echo esc_attr( $is_blank ? "embed.example.com\nexample.com" : '' ); ?>"><?php echo esc_textarea( implode( "\n", $row['hosts'] ) ); ?></textarea>
+								<?php foreach ( $overlaps as $host => $builtin_label ) : ?>
+									<p class="description cg-custom-overlap">
+										<?php
+										printf(
+											/* translators: 1: host name, 2: built-in provider label. */
+											esc_html__( '%1$s is handled by the built-in %2$s provider, which takes precedence — this entry is ignored for that host. Remove it here to clear this note.', 'calucon-third-party-embed-gate' ),
+											'<code>' . esc_html( $host ) . '</code>',
+											esc_html( $builtin_label )
+										);
+										?>
+									</p>
+								<?php endforeach; ?>
+							</td>
+							<td><textarea name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[script_hosts]" rows="2" class="code" aria-label="<?php echo esc_attr( $aria_scripts ); ?>"><?php echo esc_textarea( implode( "\n", $row['script_hosts'] ) ); ?></textarea></td>
+							<td class="cg-kind-cell">
+								<span class="cg-kind-glyph" data-cg-kind="<?php echo esc_attr( $row['kind'] ); ?>" aria-hidden="true"></span>
+								<select name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[kind]" aria-label="<?php echo esc_attr( $aria_kind ); ?>">
+									<?php foreach ( $kinds as $value => $kind_label ) : ?>
+										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $row['kind'], $value ); ?>><?php echo esc_html( $kind_label ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</td>
+							<td>
+								<?php if ( ! $is_blank ) : ?>
+									<input type="checkbox" name="<?php echo $name_prefix; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>[remove]" value="1" aria-label="<?php echo esc_attr( $aria_remove ); ?>">
+								<?php else : ?>
+									&mdash;
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+				<p id="cg-custom-add-wrap" hidden><button type="button" class="button" id="cg-custom-add"><?php esc_html_e( 'Add another provider', 'calucon-third-party-embed-gate' ); ?></button></p>
+		<?php
 	}
 
 	/**
@@ -378,60 +679,540 @@ final class SettingsPage {
 	}
 
 	/**
-	 * The Appearance tab: preset, corners and colours, with the live
-	 * preview (§7.1).
+	 * Bundled 24×24 glyphs for the choice menus (inline SVG, no requests).
+	 * Keyed by "<option key>:<value>"; '*' is the per-key fallback. Drawn in
+	 * currentColor so they follow the admin text colour.
 	 *
-	 * @param array $appearance Sanitised appearance option subtree.
+	 * @return array<string,string> key => SVG inner markup.
+	 */
+	private static function choice_icons(): array {
+		$rect       = '<rect x="3" y="5" width="18" height="14" rx="%s" fill="currentColor" opacity="0.85"/>';
+		$outline    = '<rect x="3.75" y="5.75" width="16.5" height="12.5" rx="%s" fill="none" stroke="currentColor" stroke-width="1.5"/>';
+		$pill       = '<rect x="%s" y="9" width="%s" height="6" rx="3" fill="currentColor"/>';
+		$pill_out   = '<rect x="4.75" y="9.75" width="14.5" height="4.5" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.5"/>';
+		$lines_left = '<rect x="4" y="7" width="12" height="2" fill="currentColor"/><rect x="4" y="11" width="16" height="2" fill="currentColor"/><rect x="4" y="15" width="9" height="2" fill="currentColor"/>';
+		$lines_ctr  = '<rect x="6" y="7" width="12" height="2" fill="currentColor"/><rect x="4" y="11" width="16" height="2" fill="currentColor"/><rect x="7.5" y="15" width="9" height="2" fill="currentColor"/>';
+		$inherit    = '<rect x="3.75" y="5.75" width="16.5" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>';
+		$dim        = '<rect x="3" y="5" width="18" height="14" rx="2" fill="currentColor" opacity="%s"/><rect x="6" y="13" width="8" height="3" rx="1" fill="currentColor"/>';
+
+		return array(
+			'preset:default'         => sprintf( $rect, 2 ),
+			'preset:minimal'         => sprintf( $outline, 2 ),
+			'preset:card'            => '<rect x="5" y="7" width="16" height="13" rx="3" fill="currentColor" opacity="0.25"/>' . sprintf( $outline, 3 ),
+			'corners:'               => sprintf( $rect, 2 ),
+			'corners:square'         => sprintf( $rect, 0 ),
+			'corners:rounded'        => sprintf( $rect, 5 ),
+			'corners:pill'           => sprintf( $rect, 7 ),
+			'corners:custom'         => sprintf( $outline, 4 ) . '<path d="M8 13l2.5 2.5L16 10" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+			'shadow:'                => $inherit,
+			'shadow:none'            => sprintf( $outline, 2 ),
+			'shadow:soft'            => '<rect x="5" y="7" width="16" height="13" rx="2" fill="currentColor" opacity="0.2"/>' . sprintf( $rect, 2 ),
+			'shadow:strong'          => '<rect x="6" y="8" width="16" height="13" rx="2" fill="currentColor" opacity="0.45"/>' . sprintf( $rect, 2 ),
+			'density:'               => sprintf( $outline, 2 ) . '<rect x="7" y="9" width="10" height="6" rx="1" fill="currentColor"/>',
+			'density:compact'        => sprintf( $outline, 2 ) . '<rect x="5.5" y="7.5" width="13" height="9" rx="1" fill="currentColor"/>',
+			'density:spacious'       => sprintf( $outline, 2 ) . '<rect x="9" y="10" width="6" height="4" rx="1" fill="currentColor"/>',
+			'align:'                 => $lines_left,
+			'align:center'           => $lines_ctr,
+			'note_size:'             => '<rect x="4" y="6" width="16" height="3" fill="currentColor"/><rect x="4" y="11" width="16" height="3" fill="currentColor"/><rect x="4" y="16" width="10" height="3" fill="currentColor"/>',
+			'note_size:small'        => '<rect x="4" y="8" width="16" height="2" fill="currentColor"/><rect x="4" y="12" width="16" height="2" fill="currentColor"/><rect x="4" y="16" width="10" height="2" fill="currentColor"/>',
+			'button_style:'          => sprintf( $pill, 4, 16 ),
+			'button_style:outline'   => $pill_out,
+			'button_size:'           => sprintf( $pill, 5, 14 ),
+			'button_size:small'      => sprintf( $pill, 7, 10 ),
+			'button_size:large'      => '<rect x="3" y="8" width="18" height="8" rx="4" fill="currentColor"/>',
+			'button_width:'          => sprintf( $pill, 7, 10 ),
+			'button_width:full'      => '<rect x="3" y="9" width="18" height="6" rx="3" fill="currentColor"/>',
+			'hover:'                 => sprintf( $pill, 5, 14 ) . '<rect x="3.5" y="7.5" width="17" height="9" rx="4.5" fill="none" stroke="currentColor" stroke-width="1" opacity="0.4"/>',
+			'hover:none'             => sprintf( $pill, 5, 14 ),
+			'hover:strong'           => sprintf( $pill, 5, 14 ) . '<rect x="2.75" y="6.75" width="18.5" height="10.5" rx="5.25" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+			'poster_panel:'          => sprintf( $outline, 2 ) . '<rect x="5.5" y="12" width="8" height="4.5" rx="1" fill="currentColor"/>',
+			'poster_panel:center'    => sprintf( $outline, 2 ) . '<rect x="8" y="9.75" width="8" height="4.5" rx="1" fill="currentColor"/>',
+			'poster_panel:bar'       => sprintf( $outline, 2 ) . '<rect x="3.75" y="13.5" width="16.5" height="4.75" rx="1" fill="currentColor"/>',
+			'poster_dim:'            => sprintf( $dim, '0.25' ),
+			'poster_dim:light'       => sprintf( $dim, '0.5' ),
+			'poster_dim:strong'      => sprintf( $dim, '0.8' ),
+			'withdraw_style:'        => sprintf( $pill, 4, 16 ),
+			'withdraw_style:outline' => $pill_out,
+			'withdraw_style:link'    => '<rect x="5" y="10" width="14" height="2" fill="currentColor"/><rect x="5" y="14" width="14" height="1.5" fill="currentColor"/>',
+		);
+	}
+
+	/**
+	 * One choice row of the Appearance tab: the same compact disclosure as
+	 * the colour rows — the summary shows a glyph and the current label, the
+	 * menu lists every option with its glyph. Real radios; no-JS safe.
+	 *
+	 * @param string $id          Element id of the control (the <details>).
+	 * @param string $key         appearance option key.
+	 * @param string $label       Row label.
+	 * @param array  $choices     value => label.
+	 * @param array  $appearance  Sanitised appearance subtree.
+	 * @param string $description Optional description line.
+	 * @return void
+	 */
+	private function select_row( string $id, string $key, string $label, array $choices, array $appearance, string $description = '' ): void {
+		$icons    = self::choice_icons();
+		$label_id = $id . '-label';
+		$current  = (string) $appearance[ $key ];
+		if ( ! array_key_exists( $current, $choices ) ) {
+			$current = (string) array_key_first( $choices );
+		}
+		$icon_of = static function ( string $value ) use ( $icons, $key ): string {
+			$svg = isset( $icons[ $key . ':' . $value ] ) ? $icons[ $key . ':' . $value ] : ( isset( $icons[ $key . ':*' ] ) ? $icons[ $key . ':*' ] : '' );
+			return '<svg class="cg-choice__icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">' . $svg . '</svg>';
+		};
+		?>
+					<tr>
+						<th scope="row"><span id="<?php echo esc_attr( $label_id ); ?>"><?php echo esc_html( $label ); ?></span></th>
+						<td>
+							<details id="<?php echo esc_attr( $id ); ?>" class="cg-color cg-choice" data-cg-choice="<?php echo esc_attr( $key ); ?>">
+								<summary class="cg-color__summary" id="<?php echo esc_attr( $id ); ?>-summary" aria-labelledby="<?php echo esc_attr( $label_id ); ?> <?php echo esc_attr( $id ); ?>-summary">
+									<?php echo $icon_of( $current ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static bundled SVG from choice_icons(). ?>
+									<span class="cg-color__name"><?php echo esc_html( $choices[ $current ] ); ?></span>
+								</summary>
+								<div class="cg-color__menu cg-choice__menu" role="radiogroup" aria-labelledby="<?php echo esc_attr( $label_id ); ?>">
+									<?php foreach ( $choices as $value => $choice_label ) : ?>
+										<label class="cg-color__option">
+											<input type="radio" name="<?php echo esc_attr( Options::OPTION . '[appearance][' . $key . ']' ); ?>" value="<?php echo esc_attr( (string) $value ); ?>" data-cg-name="<?php echo esc_attr( $choice_label ); ?>" <?php checked( (string) $value, $current ); ?>>
+											<?php echo $icon_of( (string) $value ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static bundled SVG from choice_icons(). ?>
+											<span class="cg-color__label"><?php echo esc_html( $choice_label ); ?></span>
+										</label>
+									<?php endforeach; ?>
+								</div>
+							</details>
+							<?php if ( '' !== $description ) : ?>
+								<p class="description"><?php echo esc_html( $description ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+		<?php
+	}
+
+	/**
+	 * What a cleared colour resolves to, for showing "Default" honestly:
+	 * the theme's base/contrast/accent-8 presets when the palette has them
+	 * (the stylesheet's own fallbacks), else the plugin's built-in colours.
+	 *
+	 * @param string $key     appearance colour key.
+	 * @param array  $palette Theme palette entries.
+	 * @return array{hex:string,name:string}
+	 */
+	private function default_color( string $key, array $palette ): array {
+		$base = (string) preg_replace( '/^dark_/', '', $key );
+		if ( 'link' === $base || 'border_color' === $base ) {
+			$fg = $this->default_color( 'fg', $palette );
+			return array(
+				'hex'  => $fg['hex'],
+				'name' => __( 'Default — same as panel text', 'calucon-third-party-embed-gate' ),
+			);
+		}
+		$map  = array(
+			'bg'        => array( 'base', '#1b1b1b' ),
+			'fg'        => array( 'contrast', '#f0f0f0' ),
+			'accent'    => array( 'accent-8', '#5c9e00' ),
+			'accent_fg' => array( '', '#1b1b1b' ),
+		);
+		$slug = isset( $map[ $base ] ) ? $map[ $base ][0] : '';
+		$hex  = isset( $map[ $base ] ) ? $map[ $base ][1] : '';
+		foreach ( $palette as $entry ) {
+			if ( '' !== $slug && $entry['slug'] === $slug ) {
+				return array(
+					'hex'  => $entry['color'],
+					/* translators: %s: the theme's colour name. */
+					'name' => sprintf( __( 'Default — theme %s', 'calucon-third-party-embed-gate' ), $entry['name'] ),
+				);
+			}
+		}
+		return array(
+			'hex'  => $hex,
+			'name' => __( 'Default — built-in', 'calucon-third-party-embed-gate' ),
+		);
+	}
+
+	/**
+	 * Whether any option in a group differs from its default — an advanced
+	 * section starts open only when the owner has already used it.
+	 *
+	 * @param array $appearance Sanitised subtree.
+	 * @param array $keys       Option keys in the section.
+	 * @return bool
+	 */
+	private function section_touched( array $appearance, array $keys ): bool {
+		$defaults = Options::defaults()['appearance'];
+		foreach ( $keys as $key ) {
+			if ( isset( $appearance[ $key ], $defaults[ $key ] ) && $appearance[ $key ] !== $defaults[ $key ] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * One colour row of the Appearance tab: a compact disclosure showing the
+	 * current colour and its name, opening a menu of Default · the theme's
+	 * palette (named) · Custom (reveals the picker). Native <details>, real
+	 * radios — it works without JavaScript and reads right in forms mode.
+	 * Submits "<key>" = '' | preset:<slug> | custom and "<key>_custom" = hex.
+	 *
+	 * @param string $key         appearance option key.
+	 * @param string $label       Row label.
+	 * @param array  $appearance  Sanitised appearance subtree.
+	 * @param string $description Optional description line.
+	 * @param string $row_attrs   Extra attributes for the <tr> (class/hidden).
+	 * @return void
+	 */
+	private function color_row( string $key, string $label, array $appearance, string $description = '', string $row_attrs = '' ): void {
+		$dashed    = str_replace( '_', '-', $key );
+		$id        = 'cg-color-' . $dashed;
+		$label_id  = 'cg-label-' . $dashed;
+		$name      = Options::OPTION . '[appearance][' . $key . ']';
+		$stored    = (string) $appearance[ $key ];
+		$is_preset = 0 === strpos( $stored, 'preset:' );
+		$slug      = $is_preset ? substr( $stored, 7 ) : '';
+		$is_custom = '' !== $stored && ! $is_preset;
+		$palette   = $this->theme_palette();
+		$default   = $this->default_color( $key, $palette );
+		$current   = $default;
+		$known     = false;
+		foreach ( $palette as $entry ) {
+			if ( $is_preset && $entry['slug'] === $slug ) {
+				$current = array(
+					'hex'  => $entry['color'],
+					'name' => $entry['name'],
+				);
+				$known   = true;
+			}
+		}
+		if ( $is_custom ) {
+			$current = array(
+				'hex'  => $stored,
+				/* translators: %s: hex colour. */
+				'name' => sprintf( __( 'Custom %s', 'calucon-third-party-embed-gate' ), $stored ),
+			);
+		} elseif ( $is_preset && ! $known ) {
+			$current = array(
+				'hex'  => '',
+				/* translators: %s: theme colour slug no longer in the theme's palette. */
+				'name' => sprintf( __( '%s (not in the current theme)', 'calucon-third-party-embed-gate' ), $slug ),
+			);
+		}
+		?>
+					<tr <?php echo $row_attrs; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- literal attribute strings from this class. ?>>
+						<th scope="row"><span id="<?php echo esc_attr( $label_id ); ?>"><?php echo esc_html( $label ); ?></span></th>
+						<td>
+							<details class="cg-color" data-cg-color-key="<?php echo esc_attr( $key ); ?>">
+								<summary class="cg-color__summary" id="cg-color-<?php echo esc_attr( $key ); ?>-summary" aria-labelledby="<?php echo esc_attr( $label_id ); ?> cg-color-<?php echo esc_attr( $key ); ?>-summary">
+									<span class="cg-color__dot<?php echo '' === $current['hex'] ? ' cg-color__dot--missing' : ''; ?>"<?php echo '' !== $current['hex'] ? ' style="background:' . esc_attr( $current['hex'] ) . '"' : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inline. ?>></span>
+									<span class="cg-color__name"><?php echo esc_html( $current['name'] ); ?></span>
+								</summary>
+								<div class="cg-color__menu" role="radiogroup" aria-labelledby="<?php echo esc_attr( $label_id ); ?>">
+									<label class="cg-color__option">
+										<input type="radio" name="<?php echo esc_attr( $name ); ?>" value="" data-cg-hex="<?php echo esc_attr( $default['hex'] ); ?>" data-cg-name="<?php echo esc_attr( $default['name'] ); ?>" <?php checked( ! $is_preset && ! $is_custom ); ?>>
+										<span class="cg-color__dot" style="background:<?php echo esc_attr( $default['hex'] ); ?>"></span>
+										<span class="cg-color__label"><?php echo esc_html( $default['name'] ); ?></span>
+									</label>
+									<?php foreach ( $palette as $entry ) : ?>
+										<label class="cg-color__option">
+											<input type="radio" name="<?php echo esc_attr( $name ); ?>" value="preset:<?php echo esc_attr( $entry['slug'] ); ?>" data-cg-hex="<?php echo esc_attr( $entry['color'] ); ?>" data-cg-name="<?php echo esc_attr( $entry['name'] ); ?>" <?php checked( $is_preset && $entry['slug'] === $slug ); ?>>
+											<span class="cg-color__dot" style="background:<?php echo esc_attr( $entry['color'] ); ?>"></span>
+											<span class="cg-color__label"><?php echo esc_html( $entry['name'] ); ?></span>
+										</label>
+									<?php endforeach; ?>
+									<?php if ( $is_preset && ! $known ) : ?>
+										<label class="cg-color__option">
+											<input type="radio" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $stored ); ?>" data-cg-hex="" data-cg-name="<?php echo esc_attr( $current['name'] ); ?>" checked>
+											<span class="cg-color__dot cg-color__dot--missing"></span>
+											<span class="cg-color__label"><?php echo esc_html( $current['name'] ); ?></span>
+										</label>
+									<?php endif; ?>
+									<label class="cg-color__option cg-color__option--custom">
+										<input type="radio" name="<?php echo esc_attr( $name ); ?>" value="custom" data-cg-hex="<?php echo esc_attr( $is_custom ? $stored : '' ); ?>" data-cg-name="<?php esc_attr_e( 'Custom', 'calucon-third-party-embed-gate' ); ?>" <?php checked( $is_custom ); ?>>
+										<span class="cg-color__dot cg-color__dot--spectrum"></span>
+										<span class="cg-color__label"><?php esc_html_e( 'Custom colour…', 'calucon-third-party-embed-gate' ); ?></span>
+									</label>
+									<div class="cg-color__custom" <?php echo $is_custom ? '' : 'hidden'; ?>>
+										<input type="text" id="<?php echo esc_attr( $id ); ?>" class="cg-color-field" data-cg-color="<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( Options::OPTION . '[appearance][' . $key . '_custom]' ); ?>" value="<?php echo esc_attr( $is_custom ? $stored : '' ); ?>">
+									</div>
+								</div>
+							</details>
+							<?php if ( '' !== $description ) : ?>
+								<p class="description"><?php echo esc_html( $description ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+		<?php
+	}
+
+	/**
+	 * The Appearance tab (§7.1): sections of a single form, a live preview
+	 * and the readability report. Every control maps 1:1 to an appearance
+	 * option; the emitted CSS lives in Support\AppearanceCss.
+	 *
+	 * @param array $appearance Sanitised appearance subtree.
 	 * @return void
 	 */
 	private function render_appearance_tab( array $appearance ): void {
 		?>
 <div id="cg-tab-appearance" class="cg-tab-panel" role="tabpanel" aria-labelledby="cg-tabbtn-appearance">
 				<h2><?php esc_html_e( 'Appearance', 'calucon-third-party-embed-gate' ); ?></h2>
-				<p class="description"><?php esc_html_e( 'Style the placeholder panel without writing any CSS: pick a style, pick colours, and watch the preview below update as you go. The readability check tells you immediately if a colour combination would be hard to read.', 'calucon-third-party-embed-gate' ); ?></p>
+				<p class="description"><?php esc_html_e( 'Style the placeholder without writing CSS. Pick a starting point, change what you like, and watch the preview. Colours can follow your theme\'s palette or be your own; the readability check flags any pair that would be hard to read.', 'calucon-third-party-embed-gate' ); ?></p>
+
+				<div class="cg-appearance-layout">
+				<div class="cg-appearance-controls">
+				<fieldset class="cg-quick-styles">
+					<legend><?php esc_html_e( 'Start from a style', 'calucon-third-party-embed-gate' ); ?></legend>
+					<div class="cg-quick-styles__grid">
+					<?php
+					$quick_styles = array(
+						'cinema'  => __( 'Dark cinema', 'calucon-third-party-embed-gate' ),
+						'minimal' => __( 'Light minimal', 'calucon-third-party-embed-gate' ),
+						'card'    => __( 'Brand card', 'calucon-third-party-embed-gate' ),
+						'pastel'  => __( 'Soft pastel', 'calucon-third-party-embed-gate' ),
+					);
+					foreach ( $quick_styles as $style_key => $style_label ) :
+						?>
+						<button type="button" class="button cg-quick-style" data-cg-quick-style="<?php echo esc_attr( $style_key ); ?>"><span class="cg-quick-style__name"><?php echo esc_html( $style_label ); ?></span></button>
+					<?php endforeach; ?>
+						<button type="button" id="cg-appearance-reset" class="button cg-quick-style cg-quick-style--reset"><span class="cg-quick-style__name"><?php esc_html_e( 'Theme default', 'calucon-third-party-embed-gate' ); ?></span></button>
+					</div>
+					<p class="description"><?php esc_html_e( 'A style fills in every control below; "Theme default" clears them all. Nothing changes on your site until you save.', 'calucon-third-party-embed-gate' ); ?></p>
+				</fieldset>
+
+				<details class="cg-section" open>
+					<summary><h3><?php esc_html_e( 'Colours', 'calucon-third-party-embed-gate' ); ?></h3></summary>
 				<table class="form-table" role="presentation">
-					<tr>
-						<th scope="row"><label for="cg-preset"><?php esc_html_e( 'Panel style', 'calucon-third-party-embed-gate' ); ?></label></th>
-						<td>
-							<select id="cg-preset" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][preset]">
-								<option value="default" <?php selected( $appearance['preset'], 'default' ); ?>><?php esc_html_e( 'Default — filled panel', 'calucon-third-party-embed-gate' ); ?></option>
-								<option value="minimal" <?php selected( $appearance['preset'], 'minimal' ); ?>><?php esc_html_e( 'Minimal — transparent with a border', 'calucon-third-party-embed-gate' ); ?></option>
-								<option value="card" <?php selected( $appearance['preset'], 'card' ); ?>><?php esc_html_e( 'Card — border, rounded corners, shadow', 'calucon-third-party-embed-gate' ); ?></option>
-							</select>
-						</td>
+					<?php
+					$this->color_row( 'bg', __( 'Panel background', 'calucon-third-party-embed-gate' ), $appearance );
+					$this->color_row( 'fg', __( 'Panel text', 'calucon-third-party-embed-gate' ), $appearance );
+					$this->color_row( 'accent', __( 'Button background', 'calucon-third-party-embed-gate' ), $appearance );
+					$this->color_row( 'accent_fg', __( 'Button text', 'calucon-third-party-embed-gate' ), $appearance );
+					$this->color_row( 'link', __( 'Links', 'calucon-third-party-embed-gate' ), $appearance, __( 'The "Open on …" and privacy-policy links. Default: the panel text colour.', 'calucon-third-party-embed-gate' ) );
+					$this->color_row( 'border_color', __( 'Border', 'calucon-third-party-embed-gate' ), $appearance, __( 'Used when a border is shown (see Shape). Default: the panel text colour.', 'calucon-third-party-embed-gate' ) );
+					?>
+				</table>
+				</details>
+
+				<details class="cg-section" open>
+					<summary><h3><?php esc_html_e( 'Shape and layout', 'calucon-third-party-embed-gate' ); ?></h3></summary>
+				<table class="form-table" role="presentation">
+					<?php
+					$this->select_row(
+						'cg-preset',
+						'preset',
+						__( 'Panel style', 'calucon-third-party-embed-gate' ),
+						array(
+							'default' => __( 'Filled panel', 'calucon-third-party-embed-gate' ),
+							'minimal' => __( 'Minimal — transparent with a border', 'calucon-third-party-embed-gate' ),
+							'card'    => __( 'Card — border, rounded corners, shadow', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-corners',
+						'corners',
+						__( 'Corners', 'calucon-third-party-embed-gate' ),
+						array(
+							''        => __( 'Slightly rounded (default)', 'calucon-third-party-embed-gate' ),
+							'square'  => __( 'Square', 'calucon-third-party-embed-gate' ),
+							'rounded' => __( 'Rounded', 'calucon-third-party-embed-gate' ),
+							'pill'    => __( 'Rounded, with a pill-shaped button', 'calucon-third-party-embed-gate' ),
+							'custom'  => __( 'Custom radius…', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					?>
+					<tr id="cg-radius-row" <?php echo 'custom' === $appearance['corners'] ? '' : 'hidden'; ?>>
+						<th scope="row"><label for="cg-radius"><?php esc_html_e( 'Corner radius (px)', 'calucon-third-party-embed-gate' ); ?></label></th>
+						<td><input type="number" id="cg-radius" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][radius]" value="<?php echo esc_attr( (string) $appearance['radius'] ); ?>" min="0" max="48" step="1" class="small-text"></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="cg-corners"><?php esc_html_e( 'Corners', 'calucon-third-party-embed-gate' ); ?></label></th>
+						<th scope="row"><label for="cg-border-width"><?php esc_html_e( 'Border width (px)', 'calucon-third-party-embed-gate' ); ?></label></th>
 						<td>
-							<select id="cg-corners" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][corners]">
-								<option value="" <?php selected( $appearance['corners'], '' ); ?>><?php esc_html_e( 'Default — slightly rounded', 'calucon-third-party-embed-gate' ); ?></option>
-								<option value="square" <?php selected( $appearance['corners'], 'square' ); ?>><?php esc_html_e( 'Square', 'calucon-third-party-embed-gate' ); ?></option>
-								<option value="rounded" <?php selected( $appearance['corners'], 'rounded' ); ?>><?php esc_html_e( 'Rounded', 'calucon-third-party-embed-gate' ); ?></option>
-								<option value="pill" <?php selected( $appearance['corners'], 'pill' ); ?>><?php esc_html_e( 'Rounded, with a pill-shaped button', 'calucon-third-party-embed-gate' ); ?></option>
-							</select>
+							<input type="number" id="cg-border-width" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][border_width]" value="<?php echo esc_attr( (string) $appearance['border_width'] ); ?>" min="0" max="10" step="1" class="small-text" placeholder="—">
+							<p class="description"><?php esc_html_e( 'Empty: the panel style decides. 0 removes the border.', 'calucon-third-party-embed-gate' ); ?></p>
 						</td>
 					</tr>
 					<?php
-					$color_fields = array(
-						'bg'        => __( 'Panel background', 'calucon-third-party-embed-gate' ),
-						'fg'        => __( 'Panel text', 'calucon-third-party-embed-gate' ),
-						'accent'    => __( 'Button background', 'calucon-third-party-embed-gate' ),
-						'accent_fg' => __( 'Button text', 'calucon-third-party-embed-gate' ),
+					$this->select_row(
+						'cg-shadow',
+						'shadow',
+						__( 'Shadow', 'calucon-third-party-embed-gate' ),
+						array(
+							''       => __( 'Panel style decides', 'calucon-third-party-embed-gate' ),
+							'none'   => __( 'None', 'calucon-third-party-embed-gate' ),
+							'soft'   => __( 'Soft', 'calucon-third-party-embed-gate' ),
+							'strong' => __( 'Strong', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
 					);
-					foreach ( $color_fields as $color_key => $color_label ) :
-						$color_id = 'cg-color-' . str_replace( '_', '-', $color_key );
-						?>
-						<tr>
-							<th scope="row"><label for="<?php echo esc_attr( $color_id ); ?>"><?php echo esc_html( $color_label ); ?></label></th>
-							<td>
-								<input type="text" id="<?php echo esc_attr( $color_id ); ?>" class="cg-color-field" data-cg-color="<?php echo esc_attr( $color_key ); ?>" name="<?php echo esc_attr( Options::OPTION . '[appearance][' . $color_key . ']' ); ?>" value="<?php echo esc_attr( $appearance[ $color_key ] ); ?>">
-							</td>
-						</tr>
-					<?php endforeach; ?>
+					$this->select_row(
+						'cg-density',
+						'density',
+						__( 'Spacing', 'calucon-third-party-embed-gate' ),
+						array(
+							''         => __( 'Default', 'calucon-third-party-embed-gate' ),
+							'compact'  => __( 'Compact', 'calucon-third-party-embed-gate' ),
+							'spacious' => __( 'Spacious', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-align',
+						'align',
+						__( 'Alignment', 'calucon-third-party-embed-gate' ),
+						array(
+							''       => __( 'Left', 'calucon-third-party-embed-gate' ),
+							'center' => __( 'Centred', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-note-size',
+						'note_size',
+						__( 'Notice text size', 'calucon-third-party-embed-gate' ),
+						array(
+							''      => __( 'Default', 'calucon-third-party-embed-gate' ),
+							'small' => __( 'Small', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					?>
 				</table>
-				<p class="description"><?php esc_html_e( 'A cleared colour inherits your theme\'s palette — that is the default, and usually the best choice. The preview cannot use your theme\'s palette here in the admin, so with cleared colours it shows the plugin\'s built-in look; on your site the panel follows the theme.', 'calucon-third-party-embed-gate' ); ?></p>
+				</details>
 
+				<details class="cg-section" <?php echo $this->section_touched( $appearance, array( 'button_style', 'button_size', 'button_width', 'hover', 'play_icon' ) ) ? 'open' : ''; ?>>
+					<summary><h3><?php esc_html_e( 'Button', 'calucon-third-party-embed-gate' ); ?></h3></summary>
+				<table class="form-table" role="presentation">
+					<?php
+					$this->select_row(
+						'cg-button-style',
+						'button_style',
+						__( 'Style', 'calucon-third-party-embed-gate' ),
+						array(
+							''        => __( 'Filled', 'calucon-third-party-embed-gate' ),
+							'outline' => __( 'Outline', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-button-size',
+						'button_size',
+						__( 'Size', 'calucon-third-party-embed-gate' ),
+						array(
+							''      => __( 'Default', 'calucon-third-party-embed-gate' ),
+							'small' => __( 'Small', 'calucon-third-party-embed-gate' ),
+							'large' => __( 'Large', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-button-width',
+						'button_width',
+						__( 'Width', 'calucon-third-party-embed-gate' ),
+						array(
+							''     => __( 'Fits its text', 'calucon-third-party-embed-gate' ),
+							'full' => __( 'Full panel width', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-hover',
+						'hover',
+						__( 'Hover effect', 'calucon-third-party-embed-gate' ),
+						array(
+							''       => __( 'Subtle', 'calucon-third-party-embed-gate' ),
+							'none'   => __( 'None', 'calucon-third-party-embed-gate' ),
+							'strong' => __( 'Strong', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					?>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Icon', 'calucon-third-party-embed-gate' ); ?></th>
+						<td>
+							<input type="hidden" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][play_icon]" value="0">
+							<label><input type="checkbox" id="cg-play-icon" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][play_icon]" value="1" <?php checked( $appearance['play_icon'] ); ?>> <?php esc_html_e( 'Show an icon that matches what the embed is — play for videos, a pin for maps, a note for audio, and so on', 'calucon-third-party-embed-gate' ); ?></label>
+						</td>
+					</tr>
+				</table>
+				</details>
+
+				<details class="cg-section" <?php echo $this->section_touched( $appearance, array( 'poster_panel', 'poster_dim' ) ) ? 'open' : ''; ?>>
+					<summary><h3><?php esc_html_e( 'Poster image', 'calucon-third-party-embed-gate' ); ?></h3></summary>
+				<p class="description"><?php esc_html_e( 'For embeds with a poster image set in the block editor. Tick "Preview with a poster image" to see these.', 'calucon-third-party-embed-gate' ); ?></p>
+				<table class="form-table" role="presentation">
+					<?php
+					$this->select_row(
+						'cg-poster-panel',
+						'poster_panel',
+						__( 'Panel position', 'calucon-third-party-embed-gate' ),
+						array(
+							''       => __( 'Card, bottom-left', 'calucon-third-party-embed-gate' ),
+							'center' => __( 'Card, centred', 'calucon-third-party-embed-gate' ),
+							'bar'    => __( 'Bar along the bottom', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					$this->select_row(
+						'cg-poster-dim',
+						'poster_dim',
+						__( 'Dim the poster', 'calucon-third-party-embed-gate' ),
+						array(
+							''       => __( 'No', 'calucon-third-party-embed-gate' ),
+							'light'  => __( 'A little', 'calucon-third-party-embed-gate' ),
+							'strong' => __( 'A lot, softened', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance
+					);
+					?>
+				</table>
+				</details>
+
+				<details class="cg-section" <?php echo $this->section_touched( $appearance, array( 'withdraw_style' ) ) ? 'open' : ''; ?>>
+					<summary><h3><?php esc_html_e( 'Withdraw button', 'calucon-third-party-embed-gate' ); ?></h3></summary>
+				<table class="form-table" role="presentation">
+					<?php
+					$this->select_row(
+						'cg-withdraw-style',
+						'withdraw_style',
+						__( 'Style', 'calucon-third-party-embed-gate' ),
+						array(
+							''        => __( 'Filled — like the load button', 'calucon-third-party-embed-gate' ),
+							'outline' => __( 'Outline', 'calucon-third-party-embed-gate' ),
+							'link'    => __( 'Text link', 'calucon-third-party-embed-gate' ),
+						),
+						$appearance,
+						__( 'The "Withdraw embed consents" block or shortcode. It uses the colours and corners above.', 'calucon-third-party-embed-gate' )
+					);
+					?>
+				</table>
+				</details>
+
+				<details class="cg-section" <?php echo $this->section_touched( $appearance, array( 'dark', 'dark_bg', 'dark_fg', 'dark_accent', 'dark_accent_fg' ) ) ? 'open' : ''; ?>>
+					<summary><h3><?php esc_html_e( 'Dark mode', 'calucon-third-party-embed-gate' ); ?></h3></summary>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Dark mode colours', 'calucon-third-party-embed-gate' ); ?></th>
+						<td>
+							<input type="hidden" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][dark]" value="0">
+							<label><input type="checkbox" id="cg-dark-enabled" name="<?php echo esc_attr( Options::OPTION ); ?>[appearance][dark]" value="1" <?php checked( $appearance['dark'] ); ?>> <?php esc_html_e( 'Use different colours for visitors who prefer a dark colour scheme', 'calucon-third-party-embed-gate' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Only the colours you set here change; the rest keep the values above. Tick "Preview on a dark page background" to check them.', 'calucon-third-party-embed-gate' ); ?></p>
+						</td>
+					</tr>
+					<?php
+					$dark_rows = $appearance['dark'] ? 'class="cg-dark-row"' : 'class="cg-dark-row" hidden';
+					$this->color_row( 'dark_bg', __( 'Panel background (dark)', 'calucon-third-party-embed-gate' ), $appearance, '', $dark_rows );
+					$this->color_row( 'dark_fg', __( 'Panel text (dark)', 'calucon-third-party-embed-gate' ), $appearance, '', $dark_rows );
+					$this->color_row( 'dark_accent', __( 'Button background (dark)', 'calucon-third-party-embed-gate' ), $appearance, '', $dark_rows );
+					$this->color_row( 'dark_accent_fg', __( 'Button text (dark)', 'calucon-third-party-embed-gate' ), $appearance, '', $dark_rows );
+					?>
+				</table>
+				</details>
+				</div>
+				<div class="cg-appearance-preview">
 				<?php $this->render_preview(); ?>
+				</div>
+				</div>
 				</div>
 <?php // phpcs:ignore Generic.WhiteSpace.ScopeIndent.Incorrect -- the close tag sits at column 0 so the method emits the moved block byte-identically, with no stray indentation.
 	}
@@ -501,14 +1282,24 @@ final class SettingsPage {
 		<h3><?php esc_html_e( 'Preview', 'calucon-third-party-embed-gate' ); ?></h3>
 		<div id="cg-preview-stage" class="cg-preview-stage">
 			<?php echo $sample; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- placeholder HTML escaped by the renderer, same output as the front end. ?>
+			<p class="cg-preview-withdraw-wrap"><button type="button" class="cg-withdraw" id="cg-preview-withdraw"><?php esc_html_e( 'Withdraw embed consents', 'calucon-third-party-embed-gate' ); ?></button></p>
 		</div>
-		<p>
+		<div class="cg-preview-toggles">
 			<label>
 				<input type="checkbox" id="cg-preview-dark">
 				<?php esc_html_e( 'Preview on a dark page background', 'calucon-third-party-embed-gate' ); ?>
 			</label>
-		</p>
-		<p id="cg-contrast-report" class="cg-contrast-report" role="status" aria-live="polite"></p>
+			<label>
+				<input type="checkbox" id="cg-preview-poster">
+				<?php esc_html_e( 'Preview with a poster image', 'calucon-third-party-embed-gate' ); ?>
+			</label>
+			<label>
+				<input type="checkbox" id="cg-preview-narrow">
+				<?php esc_html_e( 'Preview at phone width', 'calucon-third-party-embed-gate' ); ?>
+			</label>
+		</div>
+		<p class="description"><?php esc_html_e( 'Readability (WCAG 4.5:1):', 'calucon-third-party-embed-gate' ); ?></p>
+		<div id="cg-contrast-report" class="cg-contrast-report" role="status" aria-live="polite"></div>
 		<?php
 	}
 
@@ -597,6 +1388,75 @@ final class SettingsPage {
 	}
 
 	/**
+	 * Plain-language names for the CSP directives the snippet uses.
+	 *
+	 * @return array<string,string> directive => label.
+	 */
+	private function csp_directive_labels(): array {
+		return array(
+			'frame-src'  => __( 'frame-src (embedded players, maps and other iframes)', 'calucon-third-party-embed-gate' ),
+			'script-src' => __( 'script-src (provider scripts, e.g. for social-media posts)', 'calucon-third-party-embed-gate' ),
+		);
+	}
+
+	/**
+	 * Content-Security-Policy helper (PLAN.md §9.13), on the Status & tools
+	 * tab. Collapsed by default: most sites send no policy and never need
+	 * this. Leads with "do I need this?", offers a browser-side self-check
+	 * (admin-csp.js — same-origin, on click; the server requests nothing),
+	 * then the snippet with a copy button, merge instructions and a table
+	 * saying which provider needs which host.
+	 *
+	 * @return void
+	 */
+	private function render_csp(): void {
+		$providers = $this->providers();
+		?>
+		<details class="cg-section cg-csp" id="cg-csp">
+			<summary><h3><?php esc_html_e( 'Content-Security-Policy (advanced)', 'calucon-third-party-embed-gate' ); ?></h3></summary>
+
+			<p><?php esc_html_e( 'A Content-Security-Policy (CSP) is a security setting some sites send to browsers. It lists which other websites a page is allowed to load anything from — and blocks the rest. Most WordPress sites do not send one. If you never set one up in a security plugin, your hosting panel or the web server, you can skip this section.', 'calucon-third-party-embed-gate' ); ?></p>
+			<p><?php esc_html_e( 'Why it matters here: when a policy does not list a provider, that provider\'s embed stays empty after the visitor clicks Load, and the browser console reports “Refused to frame …”. Listing a host only grants permission; it does not load anything — nothing is contacted before the click either way.', 'calucon-third-party-embed-gate' ); ?></p>
+
+			<p id="cg-csp-check-wrap" hidden>
+				<button type="button" class="button" id="cg-csp-check"><?php esc_html_e( 'Check my site for a policy', 'calucon-third-party-embed-gate' ); ?></button>
+				<span class="description"><?php esc_html_e( 'Loads your home page once, in this browser, and reads whether it sends a policy and what it allows. Nothing leaves your site.', 'calucon-third-party-embed-gate' ); ?></span>
+			</p>
+			<div id="cg-csp-result" class="cg-csp-result" role="status" aria-live="polite" hidden></div>
+
+			<h4><?php esc_html_e( 'Lines to add', 'calucon-third-party-embed-gate' ); ?></h4>
+			<textarea readonly rows="6" id="cg-csp-snippet" class="large-text code" aria-label="<?php echo esc_attr( __( 'Content-Security-Policy snippet', 'calucon-third-party-embed-gate' ) ); ?>"><?php echo esc_textarea( Csp::snippet( $providers ) ); ?></textarea>
+			<p id="cg-csp-copy-wrap" hidden>
+				<button type="button" class="button" id="cg-csp-copy"><?php esc_html_e( 'Copy', 'calucon-third-party-embed-gate' ); ?></button>
+				<span id="cg-csp-copied" role="status" aria-live="polite" class="description"></span>
+			</p>
+			<p class="description"><?php esc_html_e( 'Add them wherever your policy is defined — a security plugin, your hosting panel or the web server configuration. Merge, do not replace: if the policy already has a frame-src line, add these hosts to that line instead of adding a second one. If it has neither frame-src nor script-src, the browser falls back to default-src — add the hosts there.', 'calucon-third-party-embed-gate' ); ?></p>
+
+			<details class="cg-csp__providers">
+				<summary><?php esc_html_e( 'Show which provider needs which host', 'calucon-third-party-embed-gate' ); ?></summary>
+				<p class="description"><?php esc_html_e( 'Only enabled providers are listed; disable a provider under Providers and its hosts disappear from the lines above. A host can differ from the embed address when the plugin loads a privacy-preserving variant (YouTube loads from youtube-nocookie.com, for example).', 'calucon-third-party-embed-gate' ); ?></p>
+				<table class="widefat striped cg-csp-table" style="max-width: 60rem;">
+					<thead><tr>
+						<th scope="col"><?php esc_html_e( 'Provider', 'calucon-third-party-embed-gate' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Embeds load from (frame-src)', 'calucon-third-party-embed-gate' ); ?></th>
+						<th scope="col"><?php esc_html_e( 'Scripts load from (script-src)', 'calucon-third-party-embed-gate' ); ?></th>
+					</tr></thead>
+					<tbody>
+					<?php foreach ( Csp::by_provider( $providers ) as $label => $hosts ) : ?>
+						<tr>
+							<td><?php echo esc_html( $label ); ?></td>
+							<td><?php echo $hosts['frame-src'] ? '<code>' . implode( '</code><br><code>', array_map( 'esc_html', $hosts['frame-src'] ) ) : '—'; ?></td>
+							<td><?php echo $hosts['script-src'] ? '<code>' . implode( '</code><br><code>', array_map( 'esc_html', $hosts['script-src'] ) ) : '—'; ?></td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			</details>
+		</details>
+		<?php
+	}
+
+	/**
 	 * Compatibility (§7.1): the detected CMP, cache plugin and page builder,
 	 * and what the plugin decided to do about each.
 	 *
@@ -606,7 +1466,7 @@ final class SettingsPage {
 	private function render_compatibility( array $options ): void {
 		$found    = Compatibility::detect();
 		$messages = array(
-			'cache'   => __( 'Detected. Its page cache is flushed automatically when Calucon Third-Party Embed Gate settings change; after activating or deactivating Calucon Third-Party Embed Gate itself, clear it once by hand if pages look stale.', 'calucon-third-party-embed-gate' ),
+			'cache'   => __( 'Detected. Its page cache is flushed automatically when Calucon Third-Party Embed Gate settings change and when the plugin is activated, deactivated or updated. If pages still look stale, clear it once by hand.', 'calucon-third-party-embed-gate' ),
 			'builder' => $options['detection']['output_buffer']
 				? __( 'Detected. Whole-page gating is enabled, so this builder\'s embeds are covered.', 'calucon-third-party-embed-gate' )
 				: __( 'Detected. Page builders render outside the content filters — if its embeds are not being gated, enable "Gate the whole page output" under Detection.', 'calucon-third-party-embed-gate' ),

@@ -41,6 +41,11 @@ final class Provider {
 				'load_query'         => array(),
 				'fallback'           => '',
 				'privacy_url'        => null,
+				// What the embed is, for the optional button glyph: one of
+				// Support\AppearanceCss::KINDS (video, map, audio, social,
+				// form, calendar, document, image, 3d) or '' (generic).
+				// Purely presentational.
+				'kind'               => '',
 				'controller'         => null,
 				'note'               => '',
 				'action'             => '',

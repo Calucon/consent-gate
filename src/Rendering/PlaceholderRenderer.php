@@ -94,27 +94,35 @@ final class PlaceholderRenderer {
 	 */
 	private array $bridges;
 
+	/** @var bool Render the provider privacy-policy link in the panel. */
+	private bool $show_privacy_link;
+
 	/**
 	 * @param callable|null       $translate      Maps English strings to the site language.
 	 * @param callable|null       $filter_html    fn( string $html, array $provider, array $ctx ): string.
 	 * @param callable|null       $filter_payload fn( array $payload, array $provider ): array.
 	 * @param TemplateLoader|null $templates      Theme template override lookup.
 	 * @param array               $bridges        See the property docblock.
+	 * @param bool                $show_privacy_link Render the provider's
+	 *                            privacy-policy link in the panel (§5.1;
+	 *                            display.privacy_link option).
 	 */
 	public function __construct(
 		?callable $translate = null,
 		?callable $filter_html = null,
 		?callable $filter_payload = null,
 		?TemplateLoader $templates = null,
-		array $bridges = array()
+		array $bridges = array(),
+		bool $show_privacy_link = false
 	) {
-		$this->translate      = $translate ?? static function ( string $text ): string {
+		$this->translate         = $translate ?? static function ( string $text ): string {
 			return $text;
 		};
-		$this->filter_html    = $filter_html;
-		$this->filter_payload = $filter_payload;
-		$this->templates      = $templates;
-		$this->bridges        = $bridges;
+		$this->filter_html       = $filter_html;
+		$this->filter_payload    = $filter_payload;
+		$this->templates         = $templates;
+		$this->bridges           = $bridges;
+		$this->show_privacy_link = $show_privacy_link;
 	}
 
 	/**
@@ -135,6 +143,15 @@ final class PlaceholderRenderer {
 
 		if ( isset( $this->bridges['before'] ) ) {
 			call_user_func( $this->bridges['before'], $provider, $ctx );
+		}
+		// Per-embed text from the block editor (§7.5) beats the provider's
+		// text (default or settings override); the filters below still get
+		// the final word, so site code can post-process either.
+		if ( isset( $ctx['note_text'] ) && is_string( $ctx['note_text'] ) && '' !== $ctx['note_text'] ) {
+			$provider['note'] = $ctx['note_text'];
+		}
+		if ( isset( $ctx['action_text'] ) && is_string( $ctx['action_text'] ) && '' !== $ctx['action_text'] ) {
+			$provider['action'] = $ctx['action_text'];
 		}
 		if ( isset( $this->bridges['note'] ) ) {
 			$provider['note'] = (string) call_user_func( $this->bridges['note'], $provider['note'], $provider, $ctx );
@@ -163,10 +180,24 @@ final class PlaceholderRenderer {
 
 		$poster = $this->poster_of( $ctx );
 
-		$html = $this->render_via_template( $provider, $payload, $aria_label, $fallback_url, $fallback_label, $ctx, $host, $poster );
+		// The provider's privacy policy, linked before any click (§5.1):
+		// only for described providers (generic descriptors carry none),
+		// scheme-guarded like every URL sink, and off when the site owner
+		// disables the display.privacy_link option.
+		$privacy_url   = '';
+		$privacy_label = '';
+		if ( $this->show_privacy_link && isset( $provider['privacy_url'] ) && is_string( $provider['privacy_url'] ) ) {
+			$privacy_url = $this->safe_url( $provider['privacy_url'] );
+			if ( '' !== $privacy_url ) {
+				/* translators: %s: provider label (usually a company or host name). */
+				$privacy_label = sprintf( $t( '%s privacy policy' ), $label );
+			}
+		}
+
+		$html = $this->render_via_template( $provider, $payload, $aria_label, $fallback_url, $fallback_label, $ctx, $host, $poster, $privacy_url, $privacy_label );
 
 		if ( '' === $html ) {
-			$html = $this->render_builtin( $provider, $payload, $aria_label, $fallback_url, $fallback_label, $host, $poster );
+			$html = $this->render_builtin( $provider, $payload, $aria_label, $fallback_url, $fallback_label, $host, $poster, $privacy_url, $privacy_label );
 		}
 
 		if ( null !== $this->filter_html ) {
@@ -188,7 +219,7 @@ final class PlaceholderRenderer {
 	 * @param string $poster         Site-origin poster image URL, '' for none.
 	 * @return string
 	 */
-	private function render_builtin( array $provider, array $payload, string $aria_label, string $fallback_url, string $fallback_label, string $host = '', string $poster = '' ): string {
+	private function render_builtin( array $provider, array $payload, string $aria_label, string $fallback_url, string $fallback_label, string $host = '', string $poster = '', string $privacy_url = '', string $privacy_label = '' ): string {
 		$aspect = $this->aspect_of( $provider, $payload );
 
 		return '<div class="cg-embed' . ( '' !== $poster ? ' cg-embed--poster' : '' ) . '"'
@@ -207,6 +238,9 @@ final class PlaceholderRenderer {
 			. ( '' !== $fallback_url
 				? '<p class="cg-embed__fallback"><a href="' . $this->esc( $fallback_url ) . '" rel="noopener nofollow">' . $this->esc( $fallback_label ) . '</a></p>'
 				: '' )
+			. ( '' !== $privacy_url
+				? '<p class="cg-embed__privacy"><a href="' . $this->esc( $privacy_url ) . '" rel="noopener nofollow">' . $this->esc( $privacy_label ) . '</a></p>'
+				: '' )
 			. '</div>'
 			. '</div>';
 	}
@@ -224,7 +258,7 @@ final class PlaceholderRenderer {
 	 * @param string $poster         Site-origin poster image URL, '' for none.
 	 * @return string '' when no template applies.
 	 */
-	private function render_via_template( array $provider, array $payload, string $aria_label, string $fallback_url, string $fallback_label, array $ctx, string $host = '', string $poster = '' ): string {
+	private function render_via_template( array $provider, array $payload, string $aria_label, string $fallback_url, string $fallback_label, array $ctx, string $host = '', string $poster = '', string $privacy_url = '', string $privacy_label = '' ): string {
 		if ( null === $this->templates ) {
 			return '';
 		}
@@ -243,6 +277,8 @@ final class PlaceholderRenderer {
 				'action'         => $provider['action'],
 				'fallback_url'   => $fallback_url,
 				'fallback_label' => $fallback_label,
+				'privacy_url'    => $privacy_url,
+				'privacy_label'  => $privacy_label,
 				'payload_attr'   => $this->esc_json( $payload ),
 				'aspect'         => $this->aspect_of( $provider, $payload ),
 				'host'           => $host,

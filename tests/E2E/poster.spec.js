@@ -41,6 +41,24 @@ test( 'poster renders site-origin and decorative, with zero third-party requests
 	await expect( container.locator( '.cg-embed__fallback a' ) ).toBeVisible();
 } );
 
+test( 'a poster never overflows its reserved box — no dead scrollbar, any ratio, any width', async ( { page } ) => {
+	for ( const path of [ '/page/poster', '/page/poster-mismatch' ] ) {
+		for ( const width of [ 360, 800, 1280 ] ) {
+			await page.setViewportSize( { width, height: 800 } );
+			await page.goto( path );
+			await page.waitForLoadState( 'networkidle' );
+			const box = page.locator( '.cg-embed--poster' );
+			const metrics = await box.evaluate( ( el ) => ( {
+				sh: el.scrollHeight, ch: el.clientHeight, sw: el.scrollWidth, cw: el.clientWidth,
+				img: el.querySelector( '.cg-embed__poster' ).getBoundingClientRect().height,
+			} ) );
+			expect( metrics.sh, `${ path } @${ width }: vertical overflow` ).toBeLessThanOrEqual( metrics.ch );
+			expect( metrics.sw, `${ path } @${ width }: horizontal overflow` ).toBeLessThanOrEqual( metrics.cw );
+			expect( Math.abs( metrics.img - metrics.ch ), `${ path } @${ width }: poster fills the box` ).toBeLessThanOrEqual( 1 );
+		}
+	}
+} );
+
 test( 'activation removes the poster along with the panel', async ( { page } ) => {
 	await page.route( '**', ( route ) => {
 		const host = new URL( route.request().url() ).hostname;

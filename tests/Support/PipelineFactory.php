@@ -34,7 +34,10 @@ final class PipelineFactory {
 		$scanner  = new HtmlScanner();
 		$hosts    = new HostMatcher( $own_hosts );
 		$registry = new Registry( null === $providers ? Descriptors::all() : $providers );
-		$renderer = new PlaceholderRenderer();
+		// The provider privacy link is off by default; a fixture opts in
+		// through ctx.json {"privacy_link": true} (the E2E app turns it on
+		// for every page).
+		$renderer = new PlaceholderRenderer( null, null, null, null, array(), ! empty( $ctx['privacy_link'] ) );
 
 		$iframe = new IframeRule( $scanner, $hosts, $registry, $renderer );
 		$embed  = new EmbedObjectRule( $scanner, $hosts, $registry, $renderer );

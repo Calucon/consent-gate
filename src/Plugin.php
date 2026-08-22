@@ -38,6 +38,7 @@ use CaluconEmbedGate\Integration\TheContent;
 use CaluconEmbedGate\Integration\Widgets;
 use CaluconEmbedGate\Integration\WithdrawShortcode;
 use CaluconEmbedGate\Providers\Builtin\Descriptors;
+use CaluconEmbedGate\Providers\CustomProviders;
 use CaluconEmbedGate\Providers\Registry;
 use CaluconEmbedGate\Rendering\PlaceholderRenderer;
 use CaluconEmbedGate\Rendering\TemplateLoader;
@@ -98,6 +99,15 @@ final class Plugin {
 			},
 			function (): bool {
 				return $this->should_bail();
+			},
+			function (): array {
+				$kinds = array();
+				foreach ( $this->providers() as $descriptor ) {
+					if ( ! empty( $descriptor['id'] ) && is_string( $descriptor['id'] ) ) {
+						$kinds[ $descriptor['id'] ] = isset( $descriptor['kind'] ) && is_string( $descriptor['kind'] ) ? $descriptor['kind'] : '';
+					}
+				}
+				return $kinds;
 			}
 		);
 		$this->assets->register();
@@ -114,7 +124,8 @@ final class Plugin {
 				// page with no embeds — without this enqueue the button is a
 				// dead element there (invariant 2's spirit).
 				$this->assets->enqueue_assets();
-			}
+			},
+			(string) $this->options['appearance']['withdraw_style']
 		);
 		$withdraw->register();
 		( new BlockEditor( $withdraw ) )->register();
@@ -174,6 +185,30 @@ final class Plugin {
 				CacheFlush::flush_all();
 			}
 		);
+		// Activation: cached pages hold ungated embeds until the cache
+		// learns otherwise. Updates: cached pages hold the previous version's
+		// placeholder markup (this hook runs in the code that was active
+		// during the update, so it covers every update after the one that
+		// introduced it).
+		register_activation_hook(
+			CALUCON_EMBED_GATE_FILE,
+			static function (): void {
+				CacheFlush::flush_all();
+			}
+		);
+		add_action(
+			'upgrader_process_complete',
+			static function ( $upgrader, $extra ): void {
+				if ( ! is_array( $extra ) || 'update' !== ( $extra['action'] ?? '' ) || 'plugin' !== ( $extra['type'] ?? '' ) ) {
+					return;
+				}
+				if ( in_array( plugin_basename( CALUCON_EMBED_GATE_FILE ), (array) ( $extra['plugins'] ?? array() ), true ) ) {
+					CacheFlush::flush_all();
+				}
+			},
+			10,
+			2
+		);
 	}
 
 	/**
@@ -191,13 +226,26 @@ final class Plugin {
 	 */
 	private function providers(): array {
 		if ( null === $this->providers_cache ) {
-			$this->providers_cache = (array) apply_filters(
-				'calucon_embed_gate_providers',
-				Options::apply_provider_overrides(
-					Descriptors::all( $this->translator() ),
-					$this->options
-				)
-			);
+			$translate = $this->translator();
+			// 1. Built-ins, then code-registered ones via the filter.
+			$registered = (array) apply_filters( 'calucon_embed_gate_providers', Descriptors::all( $translate ) );
+			// 2. Owner-defined rows AFTER everything registered in code, with
+			//    every host a registered provider handles stripped: a custom
+			//    row can name an unknown host, never take a known one away
+			//    from the provider that knows its privacy-preserving load
+			//    target. Nothing here can stop a gate — an unknown host is
+			//    gated generically with or without a row.
+			$rows = isset( $this->options['custom_providers'] ) && is_array( $this->options['custom_providers'] )
+				? $this->options['custom_providers'] : array();
+			if ( array() !== $rows ) {
+				$registered = array_merge(
+					$registered,
+					CustomProviders::descriptors( $rows, $translate, CustomProviders::reserved_hosts( $registered ) )
+				);
+			}
+			// 3. The owner's per-provider settings last, so they apply to
+			//    code-registered providers too (the settings table lists them).
+			$this->providers_cache = Options::apply_provider_overrides( $registered, $this->options );
 		}
 		return $this->providers_cache;
 	}
@@ -289,7 +337,8 @@ final class Plugin {
 				'fallback' => static function ( string $url, array $provider, array $ctx ): string {
 					return (string) apply_filters( 'calucon_embed_gate_fallback_url', $url, $provider, $ctx );
 				},
-			)
+			),
+			! empty( $this->options['display']['privacy_link'] )
 		);
 
 		$scanner     = new HtmlScanner();

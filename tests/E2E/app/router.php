@@ -81,6 +81,23 @@ if ( '/assets/poster.svg' === $uri ) {
 	return true;
 }
 
+if ( '/assets/poster-tall.svg' === $uri ) {
+	// A 4:3 poster for a 16:9 embed — the ratios an owner actually has.
+	header( 'Content-Type: image/svg+xml' );
+	echo '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#8a6d3b"/></svg>';
+	return true;
+}
+
+if ( '/page/poster-mismatch' === $uri ) {
+	// Poster ratio differs from the embed's reserved box: the image must be
+	// cropped into the box (object-fit), never overflow it — overflow: auto
+	// would show a dead scrollbar.
+	$content = '<iframe title="Video" width="500" height="281" src="https://www.youtube.com/embed/y_pjE_p1HwE" frameborder="0"></iframe>';
+
+	cg_e2e_page( $content, '', '', array( 'poster' => '/assets/poster-tall.svg' ) );
+	return true;
+}
+
 if ( '/page/gated' === $uri ) {
 	// Raw content as WordPress would render it, before gating: one embed per
 	// authoring style from the fixture corpus, plus a same-origin iframe that
@@ -237,6 +254,41 @@ if ( '/page/poster' === $uri ) {
 	return true;
 }
 
+if ( '/page/custom-provider' === $uri ) {
+	// Owner-defined providers exactly as Plugin::providers() assembles them:
+	// built-ins first, then the option rows (sanitised, reserved hosts
+	// refused). One row names the unknown widget host; one tries to claim
+	// YouTube's host and must be ignored; one is script-strategy.
+	$builtin   = \CaluconEmbedGate\Providers\Builtin\Descriptors::all();
+	$reserved  = \CaluconEmbedGate\Providers\CustomProviders::reserved_hosts( $builtin );
+	$options   = \CaluconEmbedGate\Support\Options::sanitize_report(
+		array(
+			'custom_providers' => array(
+				array( 'label' => 'Example Partner', 'hosts' => 'widgets.example-partner.com', 'kind' => 'social' ),
+				array( 'label' => 'Tube Thief', 'hosts' => "www.youtube.com\nwww.youtube-nocookie.com" ),
+				array( 'label' => 'Widget SDK', 'script_hosts' => 'cdn.widget-sdk.example' ),
+			),
+			'providers'        => array( 'custom-example-partner' => array( 'enabled' => '0' ) ),
+		),
+		$reserved
+	)['options'];
+	$providers = \CaluconEmbedGate\Support\Options::apply_provider_overrides(
+		array_merge( $builtin, \CaluconEmbedGate\Providers\CustomProviders::descriptors( $options['custom_providers'], null, $reserved ) ),
+		$options
+	);
+	$content   = implode(
+		"\n",
+		array(
+			'<iframe src="https://widgets.example-partner.com/embed/9" title="Unknown widget" sandbox="allow-scripts" width="400" height="300"></iframe>',
+			'<iframe title="Video" width="500" height="281" src="https://www.youtube.com/embed/y_pjE_p1HwE" frameborder="0"></iframe>',
+			'<div class="widget-sdk" data-id="1"></div><script src="https://cdn.widget-sdk.example/sdk.js"></script>',
+		)
+	);
+
+	cg_e2e_page( $content, '', '', array(), '', $providers );
+	return true;
+}
+
 if ( '/page/collision' === $uri ) {
 	// Two UNKNOWN third-party widgets (both resolve to the generic-script
 	// provider) plus one unknown iframe: activating one widget must not
@@ -367,11 +419,12 @@ if ( 0 === strpos( $uri, '/page/cmp-' ) ) {
  * @param string $extra_scripts Raw script tags after gate.js (CMP stubs + bridge).
  * @return void
  */
-function cg_e2e_page( string $content, string $extra_css = '', string $config_js = '', array $extra_ctx = array(), string $extra_scripts = '' ) {
+function cg_e2e_page( string $content, string $extra_css = '', string $config_js = '', array $extra_ctx = array(), string $extra_scripts = '', ?array $providers = null ) {
 	$gated = PipelineFactory::gate(
 		$content,
 		array( '127.0.0.1', 'localhost' ),
-		array_merge( array( 'integration' => 'e2e' ), $extra_ctx )
+		array_merge( array( 'integration' => 'e2e', 'privacy_link' => true ), $extra_ctx ),
+		$providers
 	);
 
 	header( 'Content-Type: text/html; charset=utf-8' );

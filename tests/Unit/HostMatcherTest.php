@@ -62,6 +62,9 @@ final class HostMatcherTest extends TestCase {
 	}
 
 	public function test_idn_and_punycode_compare_equal(): void {
+		if ( ! function_exists( 'idn_to_ascii' ) ) {
+			self::markTestSkipped( 'ext-intl is not available; IDN equivalence needs idn_to_ascii()' );
+		}
 		$matcher = new HostMatcher( array( 'münchen.example' ) );
 
 		self::assertTrue( $matcher->is_own_host( 'xn--mnchen-3ya.example' ) );

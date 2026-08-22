@@ -110,6 +110,19 @@
 
 		tablist.hidden = false;
 		select( initial, false );
+
+		// The hash carries the tab (so a save lands back on it), but it is
+		// also the panel's id — the browser honours it as a fragment and
+		// scrolls the panel to the top, hiding the tab bar. When the hash is
+		// a panel (not an anchor inside one), undo that: once now and once
+		// after load, when browsers retry the fragment scroll.
+		if ( panels.some( function ( panel ) { return panel.id === hash; } ) ) {
+			var toTop = function () {
+				window.scrollTo( 0, 0 );
+			};
+			toTop();
+			window.addEventListener( 'load', toTop, { once: true } );
+		}
 	}
 
 	if ( 'loading' === document.readyState ) {

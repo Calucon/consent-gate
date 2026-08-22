@@ -57,3 +57,543 @@
 .cg-contrast-report:empty {
 	display: none;
 }
+
+/* The withdraw-control sample below the panel preview. */
+.cg-preview-withdraw-wrap {
+	margin: 1em 0 0;
+}
+
+/* Preview mirror of the AppearanceCss play_icon emission (same glyph, same
+   sizing) — change both together. */
+.cg-preview--icon .cg-embed__button::before {
+	content: '';
+	display: inline-block;
+	width: 0.75em;
+	height: 0.75em;
+	margin-inline-end: 0.5em;
+	background: currentColor;
+	-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 2l10 6-10 6z'/%3E%3C/svg%3E") center/contain no-repeat;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 2l10 6-10 6z'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+/* Preview mirrors of the AppearanceCss hover emissions — change both
+   together. */
+.cg-preview--hover-none .cg-embed__button:hover {
+	filter: none;
+}
+
+.cg-preview--hover-strong .cg-embed__button:hover {
+	filter: brightness( 1.25 );
+}
+
+/* Phone-width preview. */
+.cg-preview-stage--narrow {
+	max-width: 360px;
+}
+
+.cg-quick-styles {
+	margin: 0 0 1em;
+}
+
+.cg-quick-styles legend {
+	font-weight: 600;
+}
+
+.cg-quick-styles .button {
+	margin: 0 0.25em 0.25em 0;
+}
+
+/* Desktop: options on the left, the preview in a sticky column on the
+   right, so changing a control never means scrolling down to see it. The
+   stage sample is ~500px wide; the column gives it room without squeezing
+   the form. Below the breakpoint the preview simply follows the controls. */
+@media ( min-width: 1280px ) {
+	.cg-appearance-layout {
+		display: flex;
+		gap: 2rem;
+		align-items: flex-start;
+	}
+
+	.cg-appearance-controls {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.cg-appearance-preview {
+		flex: 0 0 580px;
+		position: sticky;
+		top: calc( 32px + 1rem ); /* Below the fixed admin bar. */
+		max-height: calc( 100vh - 32px - 2rem );
+		overflow: auto;
+	}
+
+	.cg-appearance-preview h3 {
+		margin-top: 0;
+	}
+}
+
+/* Colour controls: a <details> whose summary shows the current colour and
+   its name; the menu lists Default · the theme's colours (named) · Custom.
+   Real radios underneath — keyboard and screen readers get native
+   semantics, and the form works without JavaScript. */
+.cg-color {
+	position: relative;
+	display: inline-block;
+	max-width: 100%;
+}
+
+.cg-color__summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 30px;
+	padding: 0 10px 0 4px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	background: #fff;
+	color: #1d2327;
+	cursor: pointer;
+	list-style: none;
+	line-height: 2;
+}
+
+.cg-color__summary::-webkit-details-marker {
+	display: none;
+}
+
+.cg-color__summary::after {
+	content: '';
+	width: 6px;
+	height: 6px;
+	margin-left: 2px;
+	border: solid #50575e;
+	border-width: 0 2px 2px 0;
+	transform: translateY( -2px ) rotate( 45deg );
+}
+
+.cg-color[open] > .cg-color__summary {
+	border-color: #2271b1;
+	box-shadow: 0 0 0 1px #2271b1;
+}
+
+.cg-color__summary:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.cg-color__dot {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	border: 1px solid rgba( 0, 0, 0, 0.25 );
+	box-sizing: border-box;
+	flex: 0 0 auto;
+}
+
+.cg-color__dot--spectrum {
+	background: conic-gradient( #e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935 );
+}
+
+.cg-color__dot--missing {
+	background: repeating-linear-gradient( 45deg, #fff, #fff 3px, #ddd 3px, #ddd 6px );
+}
+
+.cg-color__menu {
+	position: absolute;
+	z-index: 20;
+	top: calc( 100% + 4px );
+	left: 0;
+	display: grid;
+	grid-template-columns: repeat( 2, minmax( 150px, 1fr ) );
+	gap: 2px 12px;
+	min-width: 320px;
+	max-height: 360px;
+	overflow: auto;
+	padding: 8px;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 4px 16px rgba( 0, 0, 0, 0.18 );
+}
+
+.cg-color__option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 6px;
+	border-radius: 3px;
+	cursor: pointer;
+}
+
+.cg-color__option:hover {
+	background: #f0f0f1;
+}
+
+.cg-color__option input {
+	position: absolute;
+	opacity: 0;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+}
+
+.cg-color__option input:checked ~ .cg-color__label {
+	font-weight: 600;
+}
+
+.cg-color__option input:checked ~ .cg-color__dot {
+	box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1;
+}
+
+.cg-color__option input:focus-visible ~ .cg-color__dot,
+.cg-color__option input:focus-visible ~ .cg-choice__icon {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.cg-color__option--custom {
+	grid-column: 1 / -1;
+	border-top: 1px solid #f0f0f1;
+	margin-top: 4px;
+	padding-top: 8px;
+}
+
+.cg-color__custom {
+	grid-column: 1 / -1;
+	padding: 4px 6px 2px;
+}
+
+/* Advanced sections start collapsed unless already in use. */
+.cg-section {
+	margin: 1.5em 0 0;
+}
+
+.cg-section > summary {
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.cg-section > summary::-webkit-details-marker {
+	display: none;
+}
+
+.cg-section > summary::before {
+	content: '';
+	width: 7px;
+	height: 7px;
+	border: solid #50575e;
+	border-width: 0 2px 2px 0;
+	transform: rotate( -45deg );
+	transition: transform 120ms ease;
+}
+
+.cg-section[open] > summary::before {
+	transform: rotate( 45deg );
+}
+
+.cg-section > summary h3 {
+	display: inline;
+	margin: 0;
+}
+
+.cg-section > summary:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+/* Quick-style cards: a miniature of the panel each style produces. */
+.cg-quick-styles__grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin: 6px 0 8px;
+}
+
+.cg-quick-style.button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	height: auto;
+	padding: 8px 10px;
+}
+
+/* Readability lines: a pass/fail mark before each pair. */
+.cg-contrast-line {
+	display: block;
+	margin: 2px 0;
+}
+
+.cg-contrast-line::before {
+	content: '';
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	margin-right: 6px;
+	border-radius: 50%;
+	vertical-align: baseline;
+}
+
+.cg-contrast-line--pass::before {
+	background: #00a32a;
+}
+
+.cg-contrast-line--fail::before {
+	background: #d63638;
+}
+
+/* Sticky unsaved-changes bar at the bottom of the form. */
+.cg-unsaved {
+	position: sticky;
+	bottom: 0;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 1em -20px 0 -20px;
+	padding: 10px 20px;
+	border-top: 1px solid #c3c4c7;
+	background: #fff;
+	box-shadow: 0 -4px 12px rgba( 0, 0, 0, 0.08 );
+}
+
+.cg-unsaved[hidden] {
+	display: none; /* The author display above would otherwise beat the hidden attribute. */
+}
+
+.cg-unsaved__text {
+	flex: 1 1 auto;
+}
+
+/* Hover / focus on a row outlines what it changes in the preview. */
+.cg-preview-hl {
+	outline: 3px dashed #2271b1 !important;
+	outline-offset: 3px;
+	transition: outline-color 120ms ease;
+}
+
+/* Live miniatures: a scaled clone of the real panel inside each card. */
+.cg-quick-card {
+	display: block;
+	width: 120px;
+	height: 68px;
+	overflow: hidden;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #f6f7f7;
+	pointer-events: none;
+}
+
+.cg-quick-card__scale {
+	display: block;
+	width: 500px;
+	transform: scale( 0.236 );
+	transform-origin: 0 0;
+	padding: 4px;
+}
+
+.cg-quick-card__scale .cg-embed {
+	aspect-ratio: 16 / 9;
+}
+
+/* Change badges on collapsed sections. */
+.cg-section__badge {
+	margin-left: 8px;
+	padding: 1px 8px;
+	border-radius: 10px;
+	background: #2271b1;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.6;
+}
+
+/* The readability auto-fix button sits inline with its line. */
+.cg-contrast-fix {
+	margin-left: 6px;
+	vertical-align: baseline;
+}
+
+/* Choice controls (the former selects) share the colour control's shell;
+   each option carries a bundled glyph instead of a colour dot. */
+.cg-choice__icon {
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	color: #1d2327;
+}
+
+.cg-choice__menu {
+	grid-template-columns: 1fr;
+	min-width: 280px;
+}
+
+.cg-choice .cg-color__option input:checked ~ .cg-choice__icon {
+	color: #2271b1;
+}
+
+/* The tab hash doubles as the panel's id: a fragment jump to a panel must
+   resolve to the top of the page (tab bar in view), not to the panel. A
+   viewport-sized scroll margin does exactly that; anchors INSIDE a panel
+   (#cg-status) keep their own, normal scrolling. */
+.cg-tab-panel {
+	scroll-margin-top: 100vh;
+}
+
+/* Preview toggles, one per line. */
+.cg-preview-toggles {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 10px 0;
+}
+
+/* Status & tools: the Content-Security-Policy helper. */
+.cg-csp-result {
+	max-width: 60rem;
+	margin: 10px 0 16px;
+	padding: 10px 14px;
+	border-left: 4px solid #72aee6;
+	background: #fff;
+	box-shadow: 0 1px 1px rgba( 0, 0, 0, 0.04 );
+}
+
+.cg-csp-result--ok {
+	border-left-color: #00a32a;
+}
+
+.cg-csp-result--todo {
+	border-left-color: #dba617;
+}
+
+.cg-csp-result--error {
+	border-left-color: #d63638;
+}
+
+.cg-csp-result p {
+	margin: 0.5em 0;
+}
+
+.cg-csp-result__verdict {
+	font-weight: 600;
+}
+
+.cg-csp-result ul {
+	margin: 0.5em 0 0.5em 1.2em;
+	list-style: disc;
+}
+
+.cg-csp textarea {
+	max-width: 60rem;
+}
+
+.cg-csp .description {
+	max-width: 60rem;
+}
+
+.cg-csp__providers {
+	margin: 12px 0 0;
+}
+
+.cg-csp__providers > summary {
+	cursor: pointer;
+	color: #2271b1;
+	text-decoration: underline;
+}
+
+.cg-csp-table code {
+	white-space: nowrap;
+}
+
+/* Providers tab: owner-defined providers. */
+.cg-tag {
+	display: inline-block;
+	margin-inline-start: 6px;
+	padding: 1px 6px;
+	border-radius: 9px;
+	background: #f0f0f1;
+	color: #50575e;
+	font-size: 11px;
+	line-height: 1.6;
+	vertical-align: middle;
+}
+
+.cg-custom-providers textarea {
+	width: 100%;
+	min-width: 12em;
+}
+
+.cg-custom-providers input[type="text"] {
+	width: 100%;
+	min-width: 9em;
+}
+
+.cg-custom-overlap {
+	margin: 4px 0 0;
+}
+
+/* Icon + name as one unit: the name may wrap, but never under the icon. */
+.cg-provider-name {
+	display: inline-flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.cg-kind-glyph {
+	display: inline-block;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	margin-inline-end: 8px;
+	vertical-align: -3px;
+	background: currentColor;
+	opacity: 0.75;
+}
+
+.cg-provider-name > .cg-kind-glyph {
+	margin-inline-end: 0;
+	margin-top: 2px;
+}
+
+.cg-kind-cell {
+	white-space: nowrap;
+}
+
+/* Without JavaScript the custom-colour picker and the custom-radius row
+   follow the checked radio directly (JS toggles [hidden] the same way). */
+.cg-color:has(input[value="custom"]:checked) .cg-color__custom[hidden] {
+	display: block;
+}
+
+#cg-tab-appearance:has(input[name$="[corners]"][value="custom"]:checked) #cg-radius-row[hidden] {
+	display: table-row;
+}
+
+/* Customised rows: a marker on the label and a one-click Reset. */
+#cg-tab-appearance tr.cg-row--customised > th {
+	position: relative;
+	padding-inline-start: 14px;
+}
+
+#cg-tab-appearance tr.cg-row--customised > th::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: 0;
+	top: calc( 20px + 0.45em ); /* form-table th padding + mid-line of the label */
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #2271b1;
+}
+
+.cg-row-reset {
+	display: block;
+	margin-top: 2px;
+	font-size: 12px;
+	font-weight: 400;
+	text-decoration: underline;
+}

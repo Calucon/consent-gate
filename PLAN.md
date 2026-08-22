@@ -367,6 +367,23 @@ returning an array, so a site can add one from `functions.php` in ten lines.
 `load_path`, `fallback` and `thumbnail`. Every interpolation is URL-encoded at
 substitution time, never at template-authoring time.
 
+**Owner-defined providers (settings, 0.10.0).** The Providers tab stores
+`custom_providers[]` rows — `id` (`custom-<slug>`, generated once from the
+label and kept so the per-provider override row stays attached), `label`,
+`hosts`, `script_hosts`, `kind`. `Providers\CustomProviders::descriptors()`
+turns them into descriptors with the generic note/action wording and no
+load-target rewrite. **A custom row can never weaken the gate:** hosts a
+built-in handles are refused at save time (`Options::sanitize_report()`
+with the reserved set, surfaced as a settings notice) and stripped again at
+run time (`CustomProviders::descriptors()` receives `reserved_hosts()`),
+built-ins are listed first, and `apply_provider_overrides()` ignores
+`enabled` for custom ids — they are always gated; exemptions belong to the
+never-gate list. Rows ≤ 100, hosts ≤ 50 per list. Pinned by
+`CustomProvidersTest`: the fixture corpus is byte-identical with unrelated
+rows and with rows claiming every built-in host; hostile rows written
+straight into the option neither throw nor widen privilege. Override rows
+for removed custom ids are pruned on save.
+
 ### 4.2 Built-in set
 
 Ship enough that a typical site needs no configuration.
@@ -415,9 +432,16 @@ public API and version it.
     <p class="cg-embed__note">{note}</p>
     <button type="button" class="cg-embed__button">{action}</button>
     <p class="cg-embed__fallback"><a href="{fallback}" rel="noopener nofollow">{fallback label}</a></p>
+    <p class="cg-embed__privacy"><a href="{privacy_url}" rel="noopener nofollow">{provider} privacy policy</a></p>
   </div>
 </div>
 ```
+
+`cg-embed__privacy` (0.10.0) is present only for providers that declare a
+`privacy_url` and only while `display.privacy_link` is on (off by default); the template exposes
+it as `$privacy_url` / `$privacy_label`. Scripts must find the fallback
+link **by its class**, never as "the last link in the panel" — the privacy
+link now follows it (gate.js `removePanel` was fixed for exactly this).
 
 **`role="group"` with `aria-label`, not a heading.** This was learned the hard
 way: the original implementation opened the panel with a bold paragraph, which
@@ -551,13 +575,18 @@ everything is overridable. Four layers, in increasing order of power.
 
 Information architecture:
 
-- **Providers** — table of built-ins; per-provider on/off, custom note/action
-  text, privacy-variant on/off.
+- **Providers** — table of built-ins plus the owner's own providers (§4.1);
+  per-provider on/off (built-ins only), custom note/action text,
+  privacy-variant on/off, privacy-policy URL override; the panel
+  privacy-link toggle.
 - **Detection** — which rules are active; the additional-own-hosts list; the
   never-gate host list; the always-gate host list; output-buffer toggle with
   its warning.
-- **Appearance** — preset styles (Minimal / Card / Overlay-on-thumbnail),
-  colours as CSS custom properties with a live preview, thumbnail on/off.
+- **Appearance** — quick styles, then sectioned controls (colours following
+  the theme palette by name or overridden; shape/layout; button; poster
+  image placement; withdraw button; dark mode) with a live preview and an
+  automatic readability (contrast) check. No thumbnail auto-fetch — posters
+  are owner-supplied per block (§5.4 rejected).
 - **Consent** — memory scope and lifetime; withdrawal control placement.
 - **Compatibility** — detected CMP, detected cache plugin, detected page
   builder, and what the plugin decided to do about each. This screen is the
@@ -830,6 +859,15 @@ Sites with a CSP need `frame-src` entries for each provider's load host. Provide
 a **generated CSP snippet** in the admin based on which providers are enabled —
 and note that the whole point is those hosts are *not* contacted until consent,
 so the CSP entry is permission, not traffic.
+
+The admin section is collapsed and leads with "do I need this?" — most sites
+send no policy. It offers a browser-side self-check: the owner's browser
+fetches the site's own home page (same-origin, on click), reads the
+`Content-Security-Policy` header or `<meta http-equiv>`, and reports whether
+the enabled providers' hosts are already permitted, honouring the CSP3
+fallback chain (`frame-src` → `child-src` → `default-src`). The server makes
+no request (invariant 9). Report-only policies are reported as
+informational, never as blocking.
 
 ### 9.14 Resource hints
 
